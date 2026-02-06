@@ -75,6 +75,81 @@ class InsightStore:
                 return None
             return _row_to_insight(row)
 
+    async def update(self, insight_id: str, **kwargs) -> Insight | None:
+        existing = await self.get(insight_id)
+        if existing is None:
+            return None
+
+        allowed = {"text", "normalized_text", "frame", "domains", "entities", "confidence", "source"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return existing
+
+        now = datetime.now(timezone.utc).isoformat()
+        set_clauses = []
+        values = []
+        for key, value in updates.items():
+            if key in ("domains", "entities"):
+                value = json.dumps(value)
+            elif key == "frame":
+                value = value.value if isinstance(value, Frame) else value
+            set_clauses.append(f"{key} = ?")
+            values.append(value)
+
+        set_clauses.append("updated_at = ?")
+        values.append(now)
+        values.append(insight_id)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                f"UPDATE insights SET {', '.join(set_clauses)} WHERE id = ?",
+                values,
+            )
+            await db.commit()
+
+        return await self.get(insight_id)
+
+    async def delete(self, insight_id: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM insights WHERE id = ?", (insight_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def search_by_embedding(
+        self,
+        query_embedding: np.ndarray,
+        limit: int = 5,
+        domain: str | None = None,
+    ) -> list[SearchResult]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if domain:
+                cursor = await db.execute(
+                    "SELECT * FROM insights WHERE embedding IS NOT NULL AND domains LIKE ?",
+                    (f'%"{domain}"%',),
+                )
+            else:
+                cursor = await db.execute(
+                    "SELECT * FROM insights WHERE embedding IS NOT NULL"
+                )
+
+            rows = await cursor.fetchall()
+
+        results = []
+        for row in rows:
+            stored_emb = np.frombuffer(row["embedding"], dtype=np.float32)
+            norm_q = np.linalg.norm(query_embedding)
+            norm_s = np.linalg.norm(stored_emb)
+            if norm_q == 0 or norm_s == 0:
+                continue
+            score = float(np.dot(query_embedding, stored_emb) / (norm_q * norm_s))
+            results.append(SearchResult(insight=_row_to_insight(row), score=score))
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        return results[:limit]
+
 
 def _row_to_insight(row) -> Insight:
     return Insight(
