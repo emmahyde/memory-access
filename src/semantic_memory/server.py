@@ -59,6 +59,19 @@ class SemanticMemoryApp:
             return f"Insight {insight_id} not found."
         return f"Forgot insight {insight_id}."
 
+    async def list_insights(self, domain: str = "", frame: str = "", limit: int = 20) -> str:
+        results = await self.store.list_all(
+            domain=domain or None, frame=frame or None, limit=limit
+        )
+        if not results:
+            return "No insights stored."
+        lines = []
+        for i in results:
+            lines.append(f"[{i.id[:8]}] ({i.frame.value}) {i.normalized_text}")
+            if i.domains:
+                lines.append(f"  Domains: {', '.join(i.domains)}")
+        return "\n".join(lines)
+
 
 async def create_app(
     db_path: str | None = None,
@@ -111,6 +124,14 @@ def create_mcp_server() -> FastMCP:
         if app is None:
             app = await create_app()
         return await app.forget(insight_id=insight_id)
+
+    @mcp.tool()
+    async def list_insights(domain: str = "", frame: str = "", limit: int = 20) -> str:
+        """List stored insights, optionally filtered by domain or semantic frame type."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.list_insights(domain=domain, frame=frame, limit=limit)
 
     return mcp
 

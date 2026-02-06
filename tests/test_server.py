@@ -138,3 +138,47 @@ class TestForget:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
         result = await app.forget(insight_id="fake-id")
         assert "not found" in result.lower()
+
+
+class TestListInsights:
+    @pytest.mark.asyncio
+    async def test_list_by_domain(self, tmp_db):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_anthropic_response(json.dumps(["React insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "causal", "normalized": "React thing", "entities": [],
+            })),
+            _mock_anthropic_response(json.dumps(["Python insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "pattern", "normalized": "Python thing", "entities": [],
+            })),
+        ]
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        await app.store_insight(text="React insight", domain="react")
+        await app.store_insight(text="Python insight", domain="python")
+
+        result = await app.list_insights(domain="react")
+        assert "React thing" in result
+        assert "Python thing" not in result
+
+    @pytest.mark.asyncio
+    async def test_list_by_frame(self, tmp_db):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_anthropic_response(json.dumps(["Causal insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "causal", "normalized": "A causes B", "entities": [],
+            })),
+            _mock_anthropic_response(json.dumps(["Constraint insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "constraint", "normalized": "C requires D", "entities": [],
+            })),
+        ]
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        await app.store_insight(text="Causal insight")
+        await app.store_insight(text="Constraint insight")
+
+        result = await app.list_insights(frame="causal")
+        assert "A causes B" in result
+        assert "C requires D" not in result

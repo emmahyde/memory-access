@@ -150,6 +150,28 @@ class InsightStore:
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:limit]
 
+    async def list_all(
+        self, domain: str | None = None, frame: str | None = None, limit: int = 20
+    ) -> list[Insight]:
+        conditions = []
+        params = []
+        if domain:
+            conditions.append('domains LIKE ?')
+            params.append(f'%"{domain}"%')
+        if frame:
+            conditions.append("frame = ?")
+            params.append(frame)
+
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        query = f"SELECT * FROM insights{where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [_row_to_insight(row) for row in rows]
+
 
 def _row_to_insight(row) -> Insight:
     return Insight(
