@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS insights (
     frame TEXT NOT NULL,
     domains TEXT NOT NULL DEFAULT '[]',
     entities TEXT NOT NULL DEFAULT '[]',
+    problems TEXT NOT NULL DEFAULT '[]',
+    resolutions TEXT NOT NULL DEFAULT '[]',
+    contexts TEXT NOT NULL DEFAULT '[]',
     confidence REAL NOT NULL DEFAULT 1.0,
     source TEXT NOT NULL DEFAULT '',
     embedding BLOB,
@@ -32,6 +35,23 @@ CREATE TABLE IF NOT EXISTS schema_versions (
     description TEXT NOT NULL
 );
 """
+
+
+async def _migrate_002_add_extraction_columns(db: aiosqlite.Connection) -> str:
+    """Add problems, resolutions, contexts columns to insights table."""
+    # Check if columns already exist (they may be in SCHEMA for new DBs)
+    cursor = await db.execute("PRAGMA table_info(insights)")
+    columns = [row[1] for row in await cursor.fetchall()]
+
+    if "problems" not in columns:
+        await db.execute("ALTER TABLE insights ADD COLUMN problems TEXT NOT NULL DEFAULT '[]'")
+    if "resolutions" not in columns:
+        await db.execute("ALTER TABLE insights ADD COLUMN resolutions TEXT NOT NULL DEFAULT '[]'")
+    if "contexts" not in columns:
+        await db.execute("ALTER TABLE insights ADD COLUMN contexts TEXT NOT NULL DEFAULT '[]'")
+
+    await db.commit()
+    return "Add problems, resolutions, contexts columns to insights"
 
 
 async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
@@ -101,7 +121,7 @@ async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = [(1, _migrate_001_subject_index)]  # list[tuple[int, Callable]]
+        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns)]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -125,37 +145,30 @@ class InsightStore:
                     )
                     await db.commit()
 
-    async def _upsert_subjects(self, db, insight_id: str, domains: list[str], entities: list[str]):
+    async def _upsert_subjects(self, db, insight_id: str, insight: Insight):
         """Maintain subjects and insight_subjects tables on insert."""
         now = datetime.now(timezone.utc).isoformat()
 
-        for domain in domains:
-            name = domain.strip().lower()
-            if not name:
-                continue
-            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"domain:{name}"))
-            await db.execute(
-                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'domain', ?)",
-                (subject_id, name, now),
-            )
-            await db.execute(
-                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
-                (insight_id, subject_id),
-            )
-
-        for entity in entities:
-            name = entity.strip().lower()
-            if not name:
-                continue
-            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"entity:{name}"))
-            await db.execute(
-                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'entity', ?)",
-                (subject_id, name, now),
-            )
-            await db.execute(
-                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
-                (insight_id, subject_id),
-            )
+        for kind, items in [
+            ("domain", insight.domains),
+            ("entity", insight.entities),
+            ("problem", insight.problems),
+            ("resolution", insight.resolutions),
+            ("context", insight.contexts),
+        ]:
+            for item in items:
+                name = item.strip().lower()
+                if not name:
+                    continue
+                subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{kind}:{name}"))
+                await db.execute(
+                    "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
+                    (subject_id, name, kind, now),
+                )
+                await db.execute(
+                    "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                    (insight_id, subject_id),
+                )
 
     async def insert(self, insight: Insight, embedding: np.ndarray | None = None) -> str:
         insight_id = insight.id or str(uuid.uuid4())
@@ -165,9 +178,9 @@ class InsightStore:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """INSERT INTO insights
-                   (id, text, normalized_text, frame, domains, entities,
+                   (id, text, normalized_text, frame, domains, entities, problems, resolutions, contexts,
                     confidence, source, embedding, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     insight_id,
                     insight.text,
@@ -175,6 +188,9 @@ class InsightStore:
                     insight.frame.value,
                     json.dumps(insight.domains),
                     json.dumps(insight.entities),
+                    json.dumps(insight.problems),
+                    json.dumps(insight.resolutions),
+                    json.dumps(insight.contexts),
                     insight.confidence,
                     insight.source,
                     embedding_bytes,
@@ -188,7 +204,7 @@ class InsightStore:
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='subjects'"
             )
             if await cursor.fetchone():
-                await self._upsert_subjects(db, insight_id, insight.domains, insight.entities)
+                await self._upsert_subjects(db, insight_id, insight)
 
             await db.commit()
         return insight_id
@@ -209,7 +225,7 @@ class InsightStore:
         if existing is None:
             return None
 
-        allowed = {"text", "normalized_text", "frame", "domains", "entities", "confidence", "source"}
+        allowed = {"text", "normalized_text", "frame", "domains", "entities", "problems", "resolutions", "contexts", "confidence", "source"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return existing
@@ -218,7 +234,7 @@ class InsightStore:
         set_clauses = []
         values = []
         for key, value in updates.items():
-            if key in ("domains", "entities"):
+            if key in ("domains", "entities", "problems", "resolutions", "contexts"):
                 value = json.dumps(value)
             elif key == "frame":
                 value = value.value if isinstance(value, Frame) else value
@@ -337,6 +353,9 @@ def _row_to_insight(row) -> Insight:
         frame=Frame(row["frame"]),
         domains=json.loads(row["domains"]),
         entities=json.loads(row["entities"]),
+        problems=json.loads(row["problems"]) if row["problems"] else [],
+        resolutions=json.loads(row["resolutions"]) if row["resolutions"] else [],
+        contexts=json.loads(row["contexts"]) if row["contexts"] else [],
         confidence=row["confidence"],
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),

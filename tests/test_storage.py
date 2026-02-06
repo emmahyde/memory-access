@@ -345,3 +345,27 @@ class TestSubjectIndex:
         assert len(results) == 1
         results = await store.search_by_subject("react", kind="entity")
         assert len(results) == 1
+
+    async def test_insert_creates_problem_and_resolution_subjects(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="fixed it", normalized_text="fixed it", frame=Frame.CAUSAL,
+            domains=["backend"], entities=["Redis"],
+            problems=["memory leak"], resolutions=["restart service"],
+            contexts=["production"],
+        )
+        await store.insert(insight)
+
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT name, kind FROM subjects ORDER BY kind, name")
+            rows = await cursor.fetchall()
+            subjects = [(r["name"], r["kind"]) for r in rows]
+            assert ("production", "context") in subjects
+            assert ("backend", "domain") in subjects
+            assert ("redis", "entity") in subjects
+            assert ("memory leak", "problem") in subjects
+            assert ("restart service", "resolution") in subjects

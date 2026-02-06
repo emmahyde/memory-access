@@ -27,7 +27,13 @@ Frames and templates:
 - taxonomy: "{{specific}} is a type of {{general}}"
 - procedure: "To achieve {{goal}}, do {{steps}} in order"
 
-Return JSON: {{"frame": "<frame>", "normalized": "<canonical text>", "entities": ["<entity1>", ...]}}
+Return JSON: {{"frame": "<frame>", "normalized": "<canonical text>", "entities": ["<entity1>", ...], "problems": ["<problem1>", ...], "resolutions": ["<resolution1>", ...], "contexts": ["<context1>", ...]}}
+
+Rules for extraction:
+- entities: technical things mentioned (tools, libraries, protocols, concepts)
+- problems: issues, bugs, failures, or pain points described (empty array if none)
+- resolutions: fixes, solutions, or workarounds described (empty array if none)
+- contexts: situational context like "production", "CI pipeline", "code review" (empty array if none)
 Return ONLY valid JSON, no explanation."""
 
 
@@ -71,6 +77,9 @@ class Normalizer:
                     normalized_text=classification["normalized"],
                     frame=Frame(classification["frame"]),
                     entities=classification.get("entities", []),
+                    problems=classification.get("problems", []),
+                    resolutions=classification.get("resolutions", []),
+                    contexts=classification.get("contexts", []),
                     domains=domains or [],
                     source=source,
                 )

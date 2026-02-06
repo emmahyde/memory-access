@@ -25,6 +25,9 @@ class Insight(BaseModel):
     frame: Frame = Frame.CAUSAL
     domains: list[str] = Field(default_factory=list)
     entities: list[str] = Field(default_factory=list)
+    problems: list[str] = Field(default_factory=list)
+    resolutions: list[str] = Field(default_factory=list)
+    contexts: list[str] = Field(default_factory=list)
     confidence: float = 1.0
     source: str = ""
     created_at: Optional[datetime] = None

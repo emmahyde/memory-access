@@ -50,6 +50,9 @@ class TestClassify:
                 "frame": "causal",
                 "normalized": "State mutation causes React to skip re-renders",
                 "entities": ["React", "state mutation"],
+                "problems": [],
+                "resolutions": [],
+                "contexts": [],
             })
         )
         normalizer = Normalizer(client=mock_client)
@@ -65,11 +68,31 @@ class TestClassify:
                 "frame": "constraint",
                 "normalized": "JWT decoding requires non-null token input",
                 "entities": ["JWT", "token"],
+                "problems": [],
+                "resolutions": [],
+                "contexts": [],
             })
         )
         normalizer = Normalizer(client=mock_client)
         result = await normalizer.classify("JWT decoding requires non-null token input")
         assert result["frame"] == "constraint"
+
+    async def test_classifies_with_problem_and_resolution(self):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_anthropic_response(
+            json.dumps({
+                "frame": "causal",
+                "normalized": "Memory leak in connection pool causes OOM",
+                "entities": ["connection pool"],
+                "problems": ["memory leak", "OOM"],
+                "resolutions": [],
+                "contexts": ["production"],
+            })
+        )
+        normalizer = Normalizer(client=mock_client)
+        result = await normalizer.classify("Memory leak in production connection pool causing OOM")
+        assert result["problems"] == ["memory leak", "OOM"]
+        assert result["contexts"] == ["production"]
 
 
 class TestNormalizePipeline:
@@ -84,11 +107,17 @@ class TestNormalizePipeline:
                 "frame": "constraint",
                 "normalized": "JWT decoding requires non-null token input",
                 "entities": ["JWT"],
+                "problems": ["null pointer"],
+                "resolutions": ["null checks"],
+                "contexts": [],
             })),
             _mock_anthropic_response(json.dumps({
                 "frame": "causal",
                 "normalized": "Middleware ordering causes auth failures",
                 "entities": ["middleware", "auth"],
+                "problems": ["auth failures"],
+                "resolutions": [],
+                "contexts": ["production"],
             })),
         ]
         normalizer = Normalizer(client=mock_client)
@@ -101,4 +130,8 @@ class TestNormalizePipeline:
         assert insights[0].frame == Frame.CONSTRAINT
         assert insights[0].source == "debug"
         assert insights[0].domains == ["node", "auth"]
+        assert insights[0].problems == ["null pointer"]
+        assert insights[0].resolutions == ["null checks"]
         assert insights[1].frame == Frame.CAUSAL
+        assert insights[1].problems == ["auth failures"]
+        assert insights[1].contexts == ["production"]
