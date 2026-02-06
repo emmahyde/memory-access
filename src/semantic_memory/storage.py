@@ -94,6 +94,24 @@ async def _migrate_003_insight_relations(db: aiosqlite.Connection) -> str:
     return "Add insight_relations table with shared-subject backfill"
 
 
+async def _migrate_004_subject_relations(db: aiosqlite.Connection) -> str:
+    """Create subject_relations table for subject hierarchy."""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS subject_relations (
+            from_subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            to_subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            relation_type TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (from_subject_id, to_subject_id, relation_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_subrel_from ON subject_relations(from_subject_id);
+        CREATE INDEX IF NOT EXISTS idx_subrel_to ON subject_relations(to_subject_id);
+        CREATE INDEX IF NOT EXISTS idx_subrel_type ON subject_relations(relation_type);
+    """)
+    await db.commit()
+    return "Add subject_relations table for subject hierarchy"
+
+
 async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
     """Create subjects and insight_subjects tables, backfill from existing data."""
     await db.executescript("""
@@ -161,7 +179,7 @@ async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations)]  # list[tuple[int, Callable]]
+        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations), (4, _migrate_004_subject_relations)]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -402,6 +420,74 @@ class InsightStore:
             )
             rows = await cursor.fetchall()
             return [SearchResult(insight=_row_to_insight(row), score=float(row["rel_weight"])) for row in rows]
+
+    async def add_subject_relation(
+        self, from_name: str, from_kind: str,
+        to_name: str, to_kind: str,
+        relation_type: str,
+    ) -> bool:
+        """Create a directed relation between two subjects."""
+        from_name = from_name.strip().lower()
+        to_name = to_name.strip().lower()
+        now = datetime.now(timezone.utc).isoformat()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Find subject IDs
+            cursor = await db.execute(
+                "SELECT id FROM subjects WHERE name = ? AND kind = ?",
+                (from_name, from_kind)
+            )
+            from_row = await cursor.fetchone()
+            if not from_row:
+                return False
+
+            cursor = await db.execute(
+                "SELECT id FROM subjects WHERE name = ? AND kind = ?",
+                (to_name, to_kind)
+            )
+            to_row = await cursor.fetchone()
+            if not to_row:
+                return False
+
+            await db.execute(
+                "INSERT OR IGNORE INTO subject_relations (from_subject_id, to_subject_id, relation_type, created_at) VALUES (?, ?, ?, ?)",
+                (from_row[0], to_row[0], relation_type, now),
+            )
+            await db.commit()
+        return True
+
+    async def get_subject_relations(
+        self, name: str, kind: str | None = None, relation_type: str | None = None, limit: int = 50,
+    ) -> list[dict]:
+        """Get relations from a subject. Returns list of dicts with to_name, to_kind, relation_type."""
+        name = name.strip().lower()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            conditions = ["sf.name = ?"]
+            params: list = [name]
+
+            if kind:
+                conditions.append("sf.kind = ?")
+                params.append(kind)
+            if relation_type:
+                conditions.append("sr.relation_type = ?")
+                params.append(relation_type)
+
+            params.append(limit)
+
+            query = f"""
+                SELECT st.name as to_name, st.kind as to_kind, sr.relation_type
+                FROM subject_relations sr
+                JOIN subjects sf ON sr.from_subject_id = sf.id
+                JOIN subjects st ON sr.to_subject_id = st.id
+                WHERE {' AND '.join(conditions)}
+                LIMIT ?
+            """
+
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [{"to_name": r["to_name"], "to_kind": r["to_kind"], "relation_type": r["relation_type"]} for r in rows]
 
 
 def _row_to_insight(row) -> Insight:
