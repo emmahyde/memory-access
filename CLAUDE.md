@@ -9,33 +9,33 @@ A semantic memory MCP server that stores intent-based knowledge for AI agents. T
 ## Commands
 
 ```bash
-# Install (editable, with dev deps)
-pip install -e ".[dev]"
+# Install dependencies
+uv sync --group dev
 
 # Run all tests
-python3 -m pytest
+uv run pytest
 
 # Run a single test file
-python3 -m pytest tests/test_storage.py
+uv run pytest tests/test_storage.py
 
 # Run a single test
-python3 -m pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables
+uv run pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables
 
 # Run MCP server directly
-python3 -m semantic_memory.server
+uv run semantic-memory
 ```
 
 ## Architecture
 
-**Data flow (store):** User text → `Normalizer` (Claude haiku) decomposes into atomic insights → classifies each into a `Frame` with extracted subjects → `EmbeddingEngine` (OpenAI text-embedding-3-small) generates vectors → `InsightStore` persists to SQLite with auto-created subject links and relations.
+**Data flow (store):** User text → `Normalizer` (Claude haiku via Anthropic or Bedrock) decomposes into atomic insights → classifies each into a `Frame` with extracted subjects → `EmbeddingEngine` (OpenAI text-embedding-3-small) or `BedrockEmbeddingEngine` (Titan Embed V2) generates vectors → `InsightStore` persists to SQLite with auto-created subject links and relations.
 
 **Data flow (search):** Query → embed → cosine similarity search in `InsightStore`, or subject-based lookup, or graph traversal via shared-subject relations.
 
 ### Source layout (`src/semantic_memory/`)
 
 - **`models.py`** — `Frame` enum (CAUSAL, CONSTRAINT, PATTERN, EQUIVALENCE, TAXONOMY, PROCEDURE), `Insight`, `GitContext`, `SearchResult`
-- **`normalizer.py`** — LLM decomposition/classification via Anthropic API. Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
-- **`embeddings.py`** — OpenAI embedding generation, L2-normalized float32 vectors
+- **`normalizer.py`** — LLM decomposition/classification via Anthropic API (or Bedrock). Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
+- **`embeddings.py`** — Embedding generation (OpenAI or Bedrock Titan), L2-normalized float32 vectors. `create_embedding_engine()` factory selects provider.
 - **`storage.py`** — `InsightStore` class: SQLite persistence, migration system, subject indexing, knowledge graph queries
 - **`server.py`** — `SemanticMemoryApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
 
@@ -69,3 +69,7 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 - `AWS_REGION` — AWS region (for Bedrock, default: `us-east-1`)
 - `BEDROCK_EMBEDDING_MODEL` — Bedrock embedding model ID (default: `amazon.titan-embed-text-v2:0`)
 - `BEDROCK_LLM_MODEL` — Bedrock Claude model ID (default: `us.anthropic.claude-haiku-4-5-20251001-v1:0`)
+
+## Plugin
+
+The `plugin/` directory contains a Claude Code plugin for teaching Claude how to use the semantic-memory MCP tools. It includes a skill (`using-semantic-memory`) and a `PreCompact` hook that prompts Claude to store insights before context compaction.

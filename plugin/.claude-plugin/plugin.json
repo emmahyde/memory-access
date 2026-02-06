@@ -1,0 +1,8 @@
+{
+  "name": "semantic-memory",
+  "version": "1.0.0",
+  "description": "Teaches Claude how to use the semantic-memory MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
+  "author": {
+    "name": "Emma Hyde"
+  }
+}

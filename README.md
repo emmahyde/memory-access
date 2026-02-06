@@ -5,7 +5,16 @@ An MCP server that gives AI agents persistent, intent-based memory. Text is deco
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+# From PyPI
+pip install sem-mem
+
+# Or with uv
+uv add sem-mem
+
+# From source (development)
+git clone https://github.com/emmahyde/brainspace.git
+cd brainspace
+uv sync --group dev
 ```
 
 Requires Python 3.12+.
@@ -139,17 +148,17 @@ InsightStore (SQLite)
 ## Development
 
 ```bash
-# Run all tests (68 tests)
-python3 -m pytest
+# Run all tests (85 tests)
+uv run pytest
 
 # Run a specific test file
-python3 -m pytest tests/test_storage.py
+uv run pytest tests/test_storage.py
 
 # Run a specific test
-python3 -m pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables -v
+uv run pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables -v
 
 # Generate dummy data for testing
-python3 scripts/generate_dummy_data.py
+uv run python scripts/generate_dummy_data.py
 ```
 
 ## Database Schema
@@ -163,3 +172,15 @@ The database has four main tables plus a migration tracker:
 - **`schema_versions`** — Migration tracking
 
 Migrations run automatically on startup. Currently at version 4.
+
+## Claude Code Plugin
+
+The `plugin/` directory contains a Claude Code plugin that teaches Claude how to use the semantic-memory MCP tools effectively. To install, symlink or copy it into your plugins directory:
+
+```bash
+ln -s "$(pwd)/plugin" ~/.claude/plugins/local/semantic-memory
+```
+
+Includes:
+- **Skill** (`using-semantic-memory`) — search strategy guide, subject kinds/relations reference, best practices
+- **PreCompact hook** — prompts Claude to store key insights before context compaction
