@@ -84,3 +84,57 @@ class TestSearchInsights:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
         result = await app.search_insights(query="anything")
         assert "No matching insights" in result
+
+
+class TestUpdateInsight:
+    @pytest.mark.asyncio
+    async def test_update_existing_insight(self, tmp_db):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_anthropic_response(json.dumps(["Initial insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "causal",
+                "normalized": "A causes B",
+                "entities": ["A"],
+            })),
+        ]
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        store_result = await app.store_insight(text="Initial insight")
+        insight_id = store_result.split(": ")[1].strip()
+
+        result = await app.update_insight(insight_id=insight_id, confidence=0.5)
+        assert "Updated" in result
+
+    @pytest.mark.asyncio
+    async def test_update_nonexistent(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        result = await app.update_insight(insight_id="fake-id")
+        assert "not found" in result.lower()
+
+
+class TestForget:
+    @pytest.mark.asyncio
+    async def test_forget_existing(self, tmp_db):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_anthropic_response(json.dumps(["Forget me"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "causal",
+                "normalized": "Forget causes nothing",
+                "entities": [],
+            })),
+        ]
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        store_result = await app.store_insight(text="Forget me")
+        insight_id = store_result.split(": ")[1].strip()
+
+        result = await app.forget(insight_id=insight_id)
+        assert "Deleted" in result or "Forgot" in result
+
+    @pytest.mark.asyncio
+    async def test_forget_nonexistent(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        result = await app.forget(insight_id="fake-id")
+        assert "not found" in result.lower()

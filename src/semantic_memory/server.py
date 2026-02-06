@@ -44,6 +44,21 @@ class SemanticMemoryApp:
                 lines.append(f"  Domains: {', '.join(r.insight.domains)}")
         return "\n".join(lines)
 
+    async def update_insight(self, insight_id: str, confidence: float | None = None) -> str:
+        kwargs = {}
+        if confidence is not None:
+            kwargs["confidence"] = confidence
+        updated = await self.store.update(insight_id, **kwargs)
+        if updated is None:
+            return f"Insight {insight_id} not found."
+        return f"Updated insight {insight_id}."
+
+    async def forget(self, insight_id: str) -> str:
+        deleted = await self.store.delete(insight_id)
+        if not deleted:
+            return f"Insight {insight_id} not found."
+        return f"Forgot insight {insight_id}."
+
 
 async def create_app(
     db_path: str | None = None,
@@ -80,6 +95,22 @@ def create_mcp_server() -> FastMCP:
         if app is None:
             app = await create_app()
         return await app.search_insights(query=query, domain=domain, limit=limit)
+
+    @mcp.tool()
+    async def update_insight(insight_id: str, confidence: float = 1.0) -> str:
+        """Update an existing insight's confidence score."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.update_insight(insight_id=insight_id, confidence=confidence)
+
+    @mcp.tool()
+    async def forget(insight_id: str) -> str:
+        """Remove an insight from memory."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.forget(insight_id=insight_id)
 
     return mcp
 
