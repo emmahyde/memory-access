@@ -54,6 +54,46 @@ async def _migrate_002_add_extraction_columns(db: aiosqlite.Connection) -> str:
     return "Add problems, resolutions, contexts columns to insights"
 
 
+async def _migrate_003_insight_relations(db: aiosqlite.Connection) -> str:
+    """Create insight_relations table and backfill from shared subjects."""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS insight_relations (
+            from_id TEXT NOT NULL REFERENCES insights(id) ON DELETE CASCADE,
+            to_id TEXT NOT NULL REFERENCES insights(id) ON DELETE CASCADE,
+            relation_type TEXT NOT NULL,
+            weight REAL NOT NULL DEFAULT 1.0,
+            created_at TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (from_id, to_id, relation_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_relations_from ON insight_relations(from_id);
+        CREATE INDEX IF NOT EXISTS idx_relations_to ON insight_relations(to_id);
+    """)
+    await db.commit()
+
+    # Backfill: find insight pairs sharing subjects
+    # For each pair of insights that share at least one subject,
+    # create a shared_subject relation with weight = number of shared subjects
+    now = datetime.now(timezone.utc).isoformat()
+
+    cursor = await db.execute("""
+        SELECT a.insight_id, b.insight_id, COUNT(*) as shared_count
+        FROM insight_subjects a
+        JOIN insight_subjects b ON a.subject_id = b.subject_id AND a.insight_id < b.insight_id
+        GROUP BY a.insight_id, b.insight_id
+        HAVING shared_count >= 1
+    """)
+    rows = await cursor.fetchall()
+
+    for row in rows:
+        await db.execute(
+            "INSERT OR IGNORE INTO insight_relations (from_id, to_id, relation_type, weight, created_at) VALUES (?, ?, 'shared_subject', ?, ?)",
+            (row[0], row[1], float(row[2]), now),
+        )
+
+    await db.commit()
+    return "Add insight_relations table with shared-subject backfill"
+
+
 async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
     """Create subjects and insight_subjects tables, backfill from existing data."""
     await db.executescript("""
@@ -121,7 +161,7 @@ async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns)]  # list[tuple[int, Callable]]
+        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations)]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -343,6 +383,25 @@ class InsightStore:
                 )
             rows = await cursor.fetchall()
             return [_row_to_insight(row) for row in rows]
+
+    async def related_insights(
+        self, insight_id: str, limit: int = 10
+    ) -> list[SearchResult]:
+        """Find insights related to the given one via shared subjects."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT i.*, r.weight as rel_weight FROM insights i
+                   JOIN insight_relations r ON (
+                       (r.from_id = ? AND r.to_id = i.id) OR
+                       (r.to_id = ? AND r.from_id = i.id)
+                   )
+                   ORDER BY r.weight DESC
+                   LIMIT ?""",
+                (insight_id, insight_id, limit),
+            )
+            rows = await cursor.fetchall()
+            return [SearchResult(insight=_row_to_insight(row), score=float(row["rel_weight"])) for row in rows]
 
 
 def _row_to_insight(row) -> Insight:

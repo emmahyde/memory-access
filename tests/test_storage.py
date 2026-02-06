@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from semantic_memory.storage import InsightStore
+from semantic_memory.storage import InsightStore, _migrate_003_insight_relations
 from semantic_memory.models import Frame, Insight
 
 
@@ -369,3 +369,178 @@ class TestSubjectIndex:
             assert ("redis", "entity") in subjects
             assert ("memory leak", "problem") in subjects
             assert ("restart service", "resolution") in subjects
+
+
+class TestInsightRelations:
+    async def test_migration_003_creates_table(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='insight_relations'"
+            )
+            assert await cursor.fetchone() is not None
+
+    async def test_backfill_creates_relations_for_shared_subjects(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        # Two insights sharing "python" domain
+        i1 = Insight(text="a", normalized_text="a", frame=Frame.CAUSAL, domains=["python"], entities=["pytest"])
+        i2 = Insight(text="b", normalized_text="b", frame=Frame.PATTERN, domains=["python"], entities=["mypy"])
+        id1 = await store.insert(i1)
+        id2 = await store.insert(i2)
+
+        # Force re-run of migration 003 backfill by calling it directly
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            await _migrate_003_insight_relations(db)
+            cursor = await db.execute(
+                "SELECT * FROM insight_relations WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
+                (id1, id2, id2, id1)
+            )
+            rows = await cursor.fetchall()
+            assert len(rows) >= 1
+            # They share "python" domain subject
+            assert any(r[2] == "shared_subject" for r in rows)
+
+    async def test_related_insights_returns_connected(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        i1 = Insight(text="insight A", normalized_text="A", frame=Frame.CAUSAL,
+                     domains=["devops"], problems=["memory leak"])
+        i2 = Insight(text="insight B", normalized_text="B", frame=Frame.PROCEDURE,
+                     domains=["devops"], resolutions=["restart service"])
+        i3 = Insight(text="insight C", normalized_text="C", frame=Frame.PATTERN,
+                     domains=["frontend"])  # no overlap
+
+        id1 = await store.insert(i1)
+        id2 = await store.insert(i2)
+        id3 = await store.insert(i3)
+
+        # Build relations
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            await _migrate_003_insight_relations(db)
+
+        results = await store.related_insights(id1, limit=10)
+        related_ids = [r.insight.id for r in results]
+        assert id2 in related_ids  # shares "devops"
+        assert id3 not in related_ids  # no shared subjects
+
+    async def test_related_insights_empty(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        i1 = Insight(text="lonely", normalized_text="lonely", frame=Frame.CAUSAL, domains=["unique_domain"])
+        id1 = await store.insert(i1)
+
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            await _migrate_003_insight_relations(db)
+
+        results = await store.related_insights(id1)
+        assert results == []
+
+
+class TestSubjectRelations:
+    async def test_migration_creates_subject_relations_table(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='subject_relations'"
+            )
+            assert await cursor.fetchone() is not None
+
+    async def test_add_subject_relation(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        # Create two subjects manually
+        import aiosqlite
+        import uuid
+        now = "2026-02-06T00:00:00+00:00"
+        repo_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, "repo:semantic-memory"))
+        project_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, "project:schema-evolution"))
+
+        async with aiosqlite.connect(tmp_db) as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'repo', ?)",
+                (repo_id, "semantic-memory", now)
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'project', ?)",
+                (project_id, "schema-evolution", now)
+            )
+            await db.commit()
+
+        await store.add_subject_relation(
+            from_name="semantic-memory", from_kind="repo",
+            to_name="schema-evolution", to_kind="project",
+            relation_type="contains"
+        )
+
+        relations = await store.get_subject_relations("semantic-memory", kind="repo")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "schema-evolution"
+        assert relations[0]["relation_type"] == "contains"
+
+    async def test_get_subject_children(self, tmp_db):
+        """Test traversing the hierarchy: repo -> project -> task"""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        import aiosqlite
+        import uuid
+        now = "2026-02-06T00:00:00+00:00"
+
+        # Create subjects
+        subjects = [
+            ("repo:myrepo", "myrepo", "repo"),
+            ("project:auth-system", "auth-system", "project"),
+            ("task:add-jwt", "add-jwt", "task"),
+            ("task:add-oauth", "add-oauth", "task"),
+        ]
+        async with aiosqlite.connect(tmp_db) as db:
+            for ns, name, kind in subjects:
+                sid = str(uuid.uuid5(uuid.NAMESPACE_DNS, ns))
+                await db.execute(
+                    "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
+                    (sid, name, kind, now)
+                )
+            await db.commit()
+
+        # Create relations
+        await store.add_subject_relation("myrepo", "repo", "auth-system", "project", "contains")
+        await store.add_subject_relation("auth-system", "project", "add-jwt", "task", "contains")
+        await store.add_subject_relation("auth-system", "project", "add-oauth", "task", "contains")
+
+        # Get direct children of project
+        children = await store.get_subject_relations("auth-system", kind="project", relation_type="contains")
+        assert len(children) == 2
+        names = [c["to_name"] for c in children]
+        assert "add-jwt" in names
+        assert "add-oauth" in names
+
+    async def test_problem_solved_by_resolution(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        # Insert insights that have problems and resolutions
+        i1 = Insight(text="leak fix", normalized_text="leak fix", frame=Frame.CAUSAL,
+                     domains=["backend"], problems=["memory leak"], resolutions=["added connection pooling"])
+        await store.insert(i1)
+
+        # Now link the problem to the resolution
+        await store.add_subject_relation(
+            "memory leak", "problem", "added connection pooling", "resolution", "solved_by"
+        )
+
+        relations = await store.get_subject_relations("memory leak", kind="problem")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "added connection pooling"
+        assert relations[0]["relation_type"] == "solved_by"
