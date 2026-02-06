@@ -16,9 +16,17 @@ Requires Python 3.12+.
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | Yes | Embedding generation (text-embedding-3-small) |
-| `ANTHROPIC_API_KEY` | Yes | Insight normalization (Claude Haiku) |
+| `OPENAI_API_KEY` | Yes* | Embedding generation via OpenAI (text-embedding-3-small) |
+| `ANTHROPIC_API_KEY` | Yes* | Insight normalization via Anthropic (Claude Haiku) |
 | `MEMORY_DB_PATH` | No | Database path. Default: `~/.claude/semantic-memory/memory.db` |
+| `EMBEDDING_PROVIDER` | No | `openai` (default) or `bedrock` |
+| `LLM_PROVIDER` | No | `anthropic` (default) or `bedrock` |
+| `AWS_PROFILE` | No | AWS SSO profile name (required for Bedrock) |
+| `AWS_REGION` | No | AWS region for Bedrock. Default: `us-east-1` |
+| `BEDROCK_EMBEDDING_MODEL` | No | Bedrock model ID. Default: `amazon.titan-embed-text-v2:0` |
+| `BEDROCK_LLM_MODEL` | No | Bedrock Claude model ID. Default: `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+
+\* Not required when using `bedrock` provider.
 
 ### Claude Code
 
@@ -33,6 +41,29 @@ Add to your MCP settings (see `mcp-config-example.json`):
       "env": {
         "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+      },
+      "cwd": "/path/to/semantic-memory/src"
+    }
+  }
+}
+```
+
+### AWS Bedrock
+
+To use AWS Bedrock instead of OpenAI/Anthropic APIs:
+
+```json
+{
+  "mcpServers": {
+    "semantic-memory": {
+      "command": "python3",
+      "args": ["-m", "semantic_memory.server"],
+      "env": {
+        "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
+        "EMBEDDING_PROVIDER": "bedrock",
+        "LLM_PROVIDER": "bedrock",
+        "AWS_PROFILE": "your-sso-profile",
+        "AWS_REGION": "us-east-1"
       },
       "cwd": "/path/to/semantic-memory/src"
     }

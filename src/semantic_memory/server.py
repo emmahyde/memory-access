@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import os
-from pathlib import Path
 
 import anthropic
 from mcp.server.fastmcp import FastMCP
 
-from .embeddings import EmbeddingEngine
-from .models import Insight
+from .embeddings import EmbeddingEngine, BedrockEmbeddingEngine, create_embedding_engine
 from .normalizer import Normalizer
 from .storage import InsightStore
 
@@ -13,7 +13,7 @@ from .storage import InsightStore
 class SemanticMemoryApp:
     """Application wrapper holding shared state for MCP tool handlers."""
 
-    def __init__(self, store: InsightStore, embeddings: EmbeddingEngine, normalizer: Normalizer):
+    def __init__(self, store: InsightStore, embeddings: EmbeddingEngine | BedrockEmbeddingEngine, normalizer: Normalizer):
         self.store = store
         self.embeddings = embeddings
         self.normalizer = normalizer
@@ -143,6 +143,8 @@ async def create_app(
     db_path: str | None = None,
     embedding_model: str = "text-embedding-3-small",
     anthropic_client: anthropic.Anthropic | None = None,
+    embedding_provider: str | None = None,
+    llm_provider: str | None = None,
 ) -> SemanticMemoryApp:
     db_path = db_path or os.environ.get(
         "MEMORY_DB_PATH",
@@ -150,8 +152,10 @@ async def create_app(
     )
     store = InsightStore(db_path)
     await store.initialize()
-    embeddings = EmbeddingEngine(embedding_model)
-    normalizer = Normalizer(client=anthropic_client)
+    embedding_provider = embedding_provider or os.environ.get("EMBEDDING_PROVIDER", "openai")
+    llm_provider = llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")
+    embeddings = create_embedding_engine(provider=embedding_provider, model=embedding_model)
+    normalizer = Normalizer(client=anthropic_client, provider=llm_provider)
     return SemanticMemoryApp(store=store, embeddings=embeddings, normalizer=normalizer)
 
 

@@ -135,3 +135,55 @@ class TestNormalizePipeline:
         assert insights[1].frame == Frame.CAUSAL
         assert insights[1].problems == ["auth failures"]
         assert insights[1].contexts == ["production"]
+
+
+class TestBedrockNormalizer:
+    def test_bedrock_provider_creates_bedrock_client(self):
+        with patch("semantic_memory.normalizer.anthropic") as mock_anthropic:
+            mock_bedrock_client = MagicMock()
+            mock_anthropic.AnthropicBedrock.return_value = mock_bedrock_client
+            normalizer = Normalizer(provider="bedrock")
+            assert normalizer.client is mock_bedrock_client
+            mock_anthropic.AnthropicBedrock.assert_called_once()
+
+    def test_bedrock_default_model(self):
+        with patch("semantic_memory.normalizer.anthropic") as mock_anthropic:
+            normalizer = Normalizer(provider="bedrock")
+            assert normalizer.model == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+    def test_bedrock_custom_model_from_env(self):
+        with patch("semantic_memory.normalizer.anthropic") as mock_anthropic:
+            with patch.dict("os.environ", {"BEDROCK_LLM_MODEL": "custom-model"}):
+                normalizer = Normalizer(provider="bedrock")
+                assert normalizer.model == "custom-model"
+
+    def test_bedrock_region_from_env(self):
+        with patch("semantic_memory.normalizer.anthropic") as mock_anthropic:
+            with patch.dict("os.environ", {"AWS_REGION": "eu-west-1", "AWS_PROFILE": "myprofile"}):
+                normalizer = Normalizer(provider="bedrock")
+                mock_anthropic.AnthropicBedrock.assert_called_once_with(
+                    aws_region="eu-west-1",
+                    aws_profile="myprofile",
+                )
+
+    def test_explicit_client_overrides_provider(self):
+        explicit_client = MagicMock()
+        normalizer = Normalizer(client=explicit_client, provider="bedrock")
+        assert normalizer.client is explicit_client
+
+    async def test_bedrock_decompose_works(self):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_anthropic_response(
+            json.dumps(["Bedrock insight"])
+        )
+        normalizer = Normalizer(client=mock_client, provider="bedrock")
+        atoms = await normalizer.decompose("Bedrock insight")
+        assert atoms == ["Bedrock insight"]
+
+    def test_default_provider_creates_anthropic_client(self):
+        with patch("semantic_memory.normalizer.anthropic") as mock_anthropic:
+            mock_client = MagicMock()
+            mock_anthropic.Anthropic.return_value = mock_client
+            normalizer = Normalizer()
+            assert normalizer.client is mock_client
+            assert normalizer.model == "claude-haiku-4-5-20251001"

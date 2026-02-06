@@ -1,4 +1,5 @@
 import json
+import os
 
 import anthropic
 
@@ -43,10 +44,27 @@ class Normalizer:
     def __init__(
         self,
         client: anthropic.Anthropic | None = None,
-        model: str = "claude-haiku-4-5-20251001",
+        model: str | None = None,
+        provider: str | None = None,
     ):
-        self.client = client or anthropic.Anthropic()
-        self.model = model
+        provider = provider or os.environ.get("LLM_PROVIDER", "anthropic")
+        if client:
+            self.client = client
+        elif provider == "bedrock":
+            self.client = anthropic.AnthropicBedrock(
+                aws_region=os.environ.get("AWS_REGION", "us-east-1"),
+                aws_profile=os.environ.get("AWS_PROFILE"),
+            )
+        else:
+            self.client = anthropic.Anthropic()
+        if model:
+            self.model = model
+        elif provider == "bedrock":
+            self.model = os.environ.get(
+                "BEDROCK_LLM_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+            )
+        else:
+            self.model = "claude-haiku-4-5-20251001"
 
     async def decompose(self, text: str) -> list[str]:
         response = self.client.messages.create(

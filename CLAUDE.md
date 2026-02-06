@@ -60,6 +60,12 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 
 ## Environment Variables
 
-- `OPENAI_API_KEY` — required for embeddings
-- `ANTHROPIC_API_KEY` — required for normalization (Claude)
+- `OPENAI_API_KEY` — required for embeddings (when using OpenAI provider)
+- `ANTHROPIC_API_KEY` — required for normalization (when using Anthropic provider)
 - `MEMORY_DB_PATH` — optional, overrides default DB location
+- `EMBEDDING_PROVIDER` — `openai` (default) or `bedrock`
+- `LLM_PROVIDER` — `anthropic` (default) or `bedrock`
+- `AWS_PROFILE` — AWS SSO profile name (for Bedrock)
+- `AWS_REGION` — AWS region (for Bedrock, default: `us-east-1`)
+- `BEDROCK_EMBEDDING_MODEL` — Bedrock embedding model ID (default: `amazon.titan-embed-text-v2:0`)
+- `BEDROCK_LLM_MODEL` — Bedrock Claude model ID (default: `us.anthropic.claude-haiku-4-5-20251001-v1:0`)
