@@ -228,6 +228,44 @@ class InsightStore:
                     (insight_id, subject_id),
                 )
 
+    async def _auto_relate_subjects(self, db, insight: Insight):
+        """Auto-populate subject relations when subjects co-occur in the same insight."""
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Define relation rules: (from_kind, relation_type, to_kind, from_items, to_items)
+        rules = [
+            ("context", "frames", "problem", insight.contexts, insight.problems),
+            ("context", "applies_to", "domain", insight.contexts, insight.domains),
+            ("context", "involves", "entity", insight.contexts, insight.entities),
+            ("entity", "has_problem", "problem", insight.entities, insight.problems),
+            ("problem", "solved_by", "resolution", insight.problems, insight.resolutions),
+            ("resolution", "applies_to", "entity", insight.resolutions, insight.entities),
+            ("domain", "scopes", "entity", insight.domains, insight.entities),
+        ]
+
+        for from_kind, relation_type, to_kind, from_items, to_items in rules:
+            # Only create relations if both kinds exist in the insight
+            if not from_items or not to_items:
+                continue
+
+            # Create Cartesian product of relations
+            for from_item in from_items:
+                from_name = from_item.strip().lower()
+                if not from_name:
+                    continue
+                from_subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{from_kind}:{from_name}"))
+
+                for to_item in to_items:
+                    to_name = to_item.strip().lower()
+                    if not to_name:
+                        continue
+                    to_subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{to_kind}:{to_name}"))
+
+                    await db.execute(
+                        "INSERT OR IGNORE INTO subject_relations (from_subject_id, to_subject_id, relation_type, created_at) VALUES (?, ?, ?, ?)",
+                        (from_subject_id, to_subject_id, relation_type, now),
+                    )
+
     async def insert(self, insight: Insight, embedding: np.ndarray | None = None) -> str:
         insight_id = insight.id or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -263,6 +301,13 @@ class InsightStore:
             )
             if await cursor.fetchone():
                 await self._upsert_subjects(db, insight_id, insight)
+
+                # Check if subject_relations table exists and auto-relate subjects
+                cursor = await db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='subject_relations'"
+                )
+                if await cursor.fetchone():
+                    await self._auto_relate_subjects(db, insight)
 
             await db.commit()
         return insight_id

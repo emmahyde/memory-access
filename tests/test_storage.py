@@ -544,3 +544,93 @@ class TestSubjectRelations:
         assert len(relations) == 1
         assert relations[0]["to_name"] == "added connection pooling"
         assert relations[0]["relation_type"] == "solved_by"
+
+
+class TestAutoRelateSubjects:
+    async def test_auto_relate_problem_resolution(self, tmp_db):
+        """Test that problem + resolution creates solved_by edge."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="fixed memory leak",
+            normalized_text="fixed memory leak",
+            frame=Frame.CAUSAL,
+            problems=["memory leak"],
+            resolutions=["added connection pooling"],
+        )
+        await store.insert(insight)
+
+        # Check that the solved_by relation was auto-created
+        relations = await store.get_subject_relations("memory leak", kind="problem")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "added connection pooling"
+        assert relations[0]["relation_type"] == "solved_by"
+
+    async def test_auto_relate_context_problem(self, tmp_db):
+        """Test that context + problem creates frames edge."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="high load causes timeouts",
+            normalized_text="high load causes timeouts",
+            frame=Frame.CAUSAL,
+            contexts=["high load"],
+            problems=["timeouts"],
+        )
+        await store.insert(insight)
+
+        # Check that the frames relation was auto-created
+        relations = await store.get_subject_relations("high load", kind="context")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "timeouts"
+        assert relations[0]["relation_type"] == "frames"
+
+    async def test_auto_relate_domain_entity(self, tmp_db):
+        """Test that domain + entity creates scopes edge."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="backend authentication flow",
+            normalized_text="backend authentication flow",
+            frame=Frame.PROCEDURE,
+            domains=["backend"],
+            entities=["auth service"],
+        )
+        await store.insert(insight)
+
+        # Check that the scopes relation was auto-created
+        relations = await store.get_subject_relations("backend", kind="domain")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "auth service"
+        assert relations[0]["relation_type"] == "scopes"
+
+    async def test_auto_relate_cartesian_product(self, tmp_db):
+        """Test that multiple items create Cartesian product of edges."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="fixed multiple issues",
+            normalized_text="fixed multiple issues",
+            frame=Frame.CAUSAL,
+            problems=["memory leak", "race condition"],
+            resolutions=["connection pooling", "mutex lock", "async queue"],
+        )
+        await store.insert(insight)
+
+        # Check memory leak has 3 resolutions (Cartesian product)
+        relations = await store.get_subject_relations("memory leak", kind="problem")
+        assert len(relations) == 3
+        resolution_names = {r["to_name"] for r in relations}
+        assert resolution_names == {"connection pooling", "mutex lock", "async queue"}
+        assert all(r["relation_type"] == "solved_by" for r in relations)
+
+        # Check race condition also has 3 resolutions
+        relations = await store.get_subject_relations("race condition", kind="problem")
+        assert len(relations) == 3
+        resolution_names = {r["to_name"] for r in relations}
+        assert resolution_names == {"connection pooling", "mutex lock", "async queue"}
+        assert all(r["relation_type"] == "solved_by" for r in relations)
