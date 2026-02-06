@@ -1,5 +1,5 @@
 {
-  "description": "Semantic Memory hooks — preserves knowledge before context compaction",
+  "description": "Sem-Mem hooks — preserves knowledge before context compaction",
   "hooks": {
     "PreCompact": [
       {

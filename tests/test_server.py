@@ -2,8 +2,8 @@ import json
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock, patch
-from semantic_memory.server import create_app
-from semantic_memory.models import Frame
+from sem_mem.server import create_app
+from sem_mem.models import Frame
 
 
 def _mock_anthropic_response(text: str):
@@ -12,6 +12,19 @@ def _mock_anthropic_response(text: str):
     mock_content.text = text
     mock_response.content = [mock_content]
     return mock_response
+
+
+def _mock_embedding_engine():
+    """Create a mock EmbeddingEngine that returns deterministic vectors."""
+    engine = MagicMock()
+    call_count = [0]
+    def _embed(text):
+        call_count[0] += 1
+        vec = np.zeros(128, dtype=np.float32)
+        vec[call_count[0] % 128] = 1.0
+        return vec
+    engine.embed = _embed
+    return engine
 
 
 class TestStoreInsight:
@@ -26,7 +39,7 @@ class TestStoreInsight:
                 "entities": ["test"],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.store_insight(text="Test insight", domain="testing", source="unit_test")
         assert "Stored 1 insight" in result
 
@@ -46,7 +59,7 @@ class TestStoreInsight:
                 "entities": ["B"],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.store_insight(text="Insight A and Insight B", domain="", source="")
         assert "Stored 2 insight" in result
 
@@ -69,7 +82,7 @@ class TestSearchInsights:
                 "entities": ["baking", "oven"],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         await app.store_insight(text="React re-renders on state change", domain="react")
         await app.store_insight(text="Baking requires preheated oven", domain="cooking")
 
@@ -81,7 +94,7 @@ class TestSearchInsights:
     @pytest.mark.asyncio
     async def test_search_empty_returns_message(self, tmp_db):
         mock_client = MagicMock()
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.search_insights(query="anything")
         assert "No matching insights" in result
 
@@ -98,7 +111,7 @@ class TestUpdateInsight:
                 "entities": ["A"],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         store_result = await app.store_insight(text="Initial insight")
         insight_id = store_result.split(": ")[1].strip()
 
@@ -108,7 +121,7 @@ class TestUpdateInsight:
     @pytest.mark.asyncio
     async def test_update_nonexistent(self, tmp_db):
         mock_client = MagicMock()
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.update_insight(insight_id="fake-id")
         assert "not found" in result.lower()
 
@@ -125,7 +138,7 @@ class TestForget:
                 "entities": [],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         store_result = await app.store_insight(text="Forget me")
         insight_id = store_result.split(": ")[1].strip()
 
@@ -135,7 +148,7 @@ class TestForget:
     @pytest.mark.asyncio
     async def test_forget_nonexistent(self, tmp_db):
         mock_client = MagicMock()
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.forget(insight_id="fake-id")
         assert "not found" in result.lower()
 
@@ -154,7 +167,7 @@ class TestListInsights:
                 "frame": "pattern", "normalized": "Python thing", "entities": [],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         await app.store_insight(text="React insight", domain="react")
         await app.store_insight(text="Python insight", domain="python")
 
@@ -175,7 +188,7 @@ class TestListInsights:
                 "frame": "constraint", "normalized": "C requires D", "entities": [],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         await app.store_insight(text="Causal insight")
         await app.store_insight(text="Constraint insight")
 
@@ -198,7 +211,7 @@ class TestSearchBySubject:
                 "frame": "causal", "normalized": "Python causes X", "entities": ["Python"],
             })),
         ]
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         await app.store_insight(text="Docker insight", domain="devops")
         await app.store_insight(text="Python insight", domain="python")
 
@@ -209,6 +222,6 @@ class TestSearchBySubject:
     @pytest.mark.asyncio
     async def test_search_by_subject_empty(self, tmp_db):
         mock_client = MagicMock()
-        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.search_by_subject(name="nonexistent")
         assert "No insights found" in result

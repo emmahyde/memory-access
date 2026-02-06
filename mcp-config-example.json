@@ -1,25 +1,25 @@
 {
   "mcpServers": {
-    "semantic-memory": {
+    "sem-mem": {
       "command": "python3",
-      "args": ["-m", "semantic_memory.server"],
+      "args": ["-m", "sem_mem.server"],
       "env": {
-        "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
+        "MEMORY_DB_PATH": "~/.claude/sem-mem/memory.db",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       },
-      "cwd": "/path/to/semantic-memory/src"
+      "cwd": "/path/to/sem-mem/src"
     },
-    "semantic-memory-bedrock": {
+    "sem-mem-bedrock": {
       "command": "python3",
-      "args": ["-m", "semantic_memory.server"],
+      "args": ["-m", "sem_mem.server"],
       "env": {
-        "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
+        "MEMORY_DB_PATH": "~/.claude/sem-mem/memory.db",
         "EMBEDDING_PROVIDER": "bedrock",
         "LLM_PROVIDER": "bedrock",
         "AWS_PROFILE": "your-sso-profile",
         "AWS_REGION": "us-east-1"
       },
-      "cwd": "/path/to/semantic-memory/src"
+      "cwd": "/path/to/sem-mem/src"
     }
   }
 }

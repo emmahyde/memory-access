@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from semantic_memory.storage import InsightStore, _migrate_003_insight_relations
-from semantic_memory.models import Frame, Insight
+from sem_mem.storage import InsightStore, _migrate_003_insight_relations
+from sem_mem.models import Frame, Insight
 
 
 class TestInsightStoreInit:

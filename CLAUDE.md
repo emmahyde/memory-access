@@ -22,7 +22,7 @@ uv run pytest tests/test_storage.py
 uv run pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables
 
 # Run MCP server directly
-uv run semantic-memory
+uv run sem-mem
 ```
 
 ## Architecture
@@ -31,17 +31,17 @@ uv run semantic-memory
 
 **Data flow (search):** Query → embed → cosine similarity search in `InsightStore`, or subject-based lookup, or graph traversal via shared-subject relations.
 
-### Source layout (`src/semantic_memory/`)
+### Source layout (`src/sem_mem/`)
 
 - **`models.py`** — `Frame` enum (CAUSAL, CONSTRAINT, PATTERN, EQUIVALENCE, TAXONOMY, PROCEDURE), `Insight`, `GitContext`, `SearchResult`
 - **`normalizer.py`** — LLM decomposition/classification via Anthropic API (or Bedrock). Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
 - **`embeddings.py`** — Embedding generation (OpenAI or Bedrock Titan), L2-normalized float32 vectors. `create_embedding_engine()` factory selects provider.
 - **`storage.py`** — `InsightStore` class: SQLite persistence, migration system, subject indexing, knowledge graph queries
-- **`server.py`** — `SemanticMemoryApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
+- **`server.py`** — `SemMemApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
 
 ### Database
 
-Default location: `~/.claude/semantic-memory/memory.db` (override with `MEMORY_DB_PATH` env var).
+Default location: `~/.claude/sem-mem/memory.db` (override with `MEMORY_DB_PATH` env var).
 
 Four tables: `insights`, `subjects` (with `insight_subjects` junction), `insight_relations`, `subject_relations`. Schema versioned via `schema_versions` table.
 
@@ -72,4 +72,4 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 
 ## Plugin
 
-This repo is also a Claude Code plugin (`claude plugin install semantic-memory@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.
+This repo is also a Claude Code plugin (`claude plugin install sem-mem@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-sem-mem` skill and a `PreCompact` hook.

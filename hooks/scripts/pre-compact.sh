@@ -4,7 +4,7 @@
 # otherwise be lost when the conversation window is compacted.
 #
 # Strategy: Read hook input, output a system message instructing Claude
-# to store key insights via semantic-memory MCP tools before compaction.
+# to store key insights via sem-mem MCP tools before compaction.
 
 set -euo pipefail
 

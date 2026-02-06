@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip if commit message contains [skip ci] or [skip release]
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip release]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version bump type
+        id: bump_type
+        run: |
+          # Get PR number from merge commit
+          PR_NUMBER=$(echo "${{ github.event.head_commit.message }}" | grep -oP '(?<=#)\d+(?=\))' || echo "")
+
+          BUMP_TYPE="patch"
+
+          # Check commit message for conventional commit patterns
+          if echo "${{ github.event.head_commit.message }}" | grep -qE "BREAKING CHANGE|^[a-z]+!:"; then
+            BUMP_TYPE="major"
+          elif echo "${{ github.event.head_commit.message }}" | grep -qE "^feat:"; then
+            BUMP_TYPE="minor"
+          elif [ -n "$PR_NUMBER" ]; then
+            # Check PR labels if we have a PR number
+            LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' || echo "")
+            if echo "$LABELS" | grep -q "major"; then
+              BUMP_TYPE="major"
+            elif echo "$LABELS" | grep -q "minor"; then
+              BUMP_TYPE="minor"
+            fi
+          fi
+
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Detected bump type: $BUMP_TYPE"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          # Read current version
+          CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Split version into parts
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # Bump based on type
+          case "${{ steps.bump_type.outputs.bump_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+
+          # Update pyproject.toml
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
+          git push
+
+      - name: Create tag and release
+        run: |
+          TAG="v${{ steps.bump_version.outputs.new_version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          # Create GitHub release (this triggers publish.yml)
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

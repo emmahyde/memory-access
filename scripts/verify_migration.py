@@ -11,8 +11,8 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from semantic_memory.storage import InsightStore
-from semantic_memory.models import Insight, Frame
+from sem_mem.storage import InsightStore
+from sem_mem.models import Insight, Frame
 
 
 async def main():

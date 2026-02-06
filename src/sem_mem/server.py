@@ -10,7 +10,7 @@ from .normalizer import Normalizer
 from .storage import InsightStore
 
 
-class SemanticMemoryApp:
+class SemMemApp:
     """Application wrapper holding shared state for MCP tool handlers."""
 
     def __init__(self, store: InsightStore, embeddings: EmbeddingEngine | BedrockEmbeddingEngine, normalizer: Normalizer):
@@ -145,23 +145,25 @@ async def create_app(
     anthropic_client: anthropic.Anthropic | None = None,
     embedding_provider: str | None = None,
     llm_provider: str | None = None,
-) -> SemanticMemoryApp:
+    embeddings: EmbeddingEngine | BedrockEmbeddingEngine | None = None,
+) -> SemMemApp:
     db_path = db_path or os.environ.get(
         "MEMORY_DB_PATH",
-        os.path.expanduser("~/.claude/semantic-memory/memory.db"),
+        os.path.expanduser("~/.claude/sem-mem/memory.db"),
     )
     store = InsightStore(db_path)
     await store.initialize()
     embedding_provider = embedding_provider or os.environ.get("EMBEDDING_PROVIDER", "openai")
     llm_provider = llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")
-    embeddings = create_embedding_engine(provider=embedding_provider, model=embedding_model)
+    if embeddings is None:
+        embeddings = create_embedding_engine(provider=embedding_provider, model=embedding_model)
     normalizer = Normalizer(client=anthropic_client, provider=llm_provider)
-    return SemanticMemoryApp(store=store, embeddings=embeddings, normalizer=normalizer)
+    return SemMemApp(store=store, embeddings=embeddings, normalizer=normalizer)
 
 
 def create_mcp_server() -> FastMCP:
-    mcp = FastMCP("semantic-memory")
-    app: SemanticMemoryApp | None = None
+    mcp = FastMCP("sem-mem")
+    app: SemMemApp | None = None
 
     @mcp.tool()
     async def store_insight(

@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 from unittest.mock import MagicMock, patch
-from semantic_memory.embeddings import EmbeddingEngine, BedrockEmbeddingEngine, create_embedding_engine
+from sem_mem.embeddings import EmbeddingEngine, BedrockEmbeddingEngine, create_embedding_engine
 
 
 def _mock_embedding_response(embeddings: list[list[float]]):

@@ -1,4 +1,4 @@
-from semantic_memory.models import Frame, Insight, SearchResult
+from sem_mem.models import Frame, Insight, SearchResult
 
 
 class TestFrame:

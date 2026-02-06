@@ -1,11 +1,11 @@
 ---
-name: using-semantic-memory
-description: This skill should be used when the user asks to "store a memory", "remember this", "save this insight", "search memories", "find related insights", "what do I know about", "connect these concepts", "add a relationship", "traverse the knowledge graph", or when working with the semantic-memory MCP tools. Also activates when storing learnings, debugging knowledge, or building on prior insights.
+name: using-sem-mem
+description: This skill should be used when the user asks to "store a memory", "remember this", "save this insight", "search memories", "find related insights", "what do I know about", "connect these concepts", "add a relationship", "traverse the knowledge graph", or when working with the sem-mem MCP tools. Also activates when storing learnings, debugging knowledge, or building on prior insights.
 ---
 
-# Using Semantic Memory
+# Using Sem-Mem
 
-Semantic Memory is a persistent knowledge graph MCP server that stores insights as normalized semantic frames with embeddings and typed subject relations. Use it to build durable knowledge that survives context compaction and spans sessions.
+Sem-Mem is a persistent knowledge graph MCP server that stores insights as normalized semantic frames with embeddings and typed subject relations. Use it to build durable knowledge that survives context compaction and spans sessions.
 
 ## When to Use
 
@@ -85,7 +85,7 @@ Follow typed edges: repo→contains→project, problem→solved_by→resolution,
 | Find by exact subject | `search_by_subject` | name="asyncio", kind="entity" |
 | Browse a domain | `list_insights` | domain="python", frame="pattern" |
 | Explore connections | `related_insights` | Starting from a known insight ID |
-| Follow hierarchy | `get_subject_relations` | name="semantic-memory", kind="repo" |
+| Follow hierarchy | `get_subject_relations` | name="sem-mem", kind="repo" |
 
 **Combine tools for deep retrieval:**
 1. `search_insights` to find a relevant insight

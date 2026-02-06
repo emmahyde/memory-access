@@ -11,9 +11,9 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from semantic_memory.embeddings import EmbeddingEngine
-from semantic_memory.models import Frame, Insight
-from semantic_memory.storage import InsightStore
+from sem_mem.embeddings import EmbeddingEngine
+from sem_mem.models import Frame, Insight
+from sem_mem.storage import InsightStore
 
 
 # Template components for generating realistic insights

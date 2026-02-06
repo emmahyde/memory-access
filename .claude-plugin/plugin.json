@@ -1,12 +1,12 @@
 {
-  "name": "semantic-memory",
+  "name": "sem-mem",
   "version": "1.0.0",
-  "description": "Teaches Claude how to use the semantic-memory MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
+  "description": "Teaches Claude how to use the sem-mem MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
   "author": {
     "name": "Emma Hyde"
   },
   "homepage": "https://github.com/emmahyde/brainspace",
   "repository": "https://github.com/emmahyde/brainspace",
   "license": "MIT",
-  "keywords": ["semantic-memory", "mcp", "knowledge-graph", "embeddings", "insights"]
+  "keywords": ["sem-mem", "mcp", "knowledge-graph", "embeddings", "insights"]
 }

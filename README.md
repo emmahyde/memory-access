@@ -1,4 +1,4 @@
-# semantic-memory
+# sem-mem
 
 An MCP server that gives AI agents persistent, intent-based memory. Text is decomposed into atomic insights, classified into semantic frames, embedded as vectors, and stored in a SQLite knowledge graph with subject indexing.
 
@@ -43,14 +43,14 @@ export AWS_REGION=us-east-1
 ### 3. Install the Claude Code plugin
 
 ```bash
-claude plugin install semantic-memory@brainspace
+claude plugin install sem-mem@brainspace
 ```
 
 ### 4. Verify
 
 ```bash
 uv run pytest          # 85 tests pass
-uv run semantic-memory # server starts
+uv run sem-mem # server starts
 ```
 
 ## Configuration
@@ -61,7 +61,7 @@ uv run semantic-memory # server starts
 |---|---|---|
 | `OPENAI_API_KEY` | Yes* | Embedding generation via OpenAI (text-embedding-3-small) |
 | `ANTHROPIC_API_KEY` | Yes* | Insight normalization via Anthropic (Claude Haiku) |
-| `MEMORY_DB_PATH` | No | Database path. Default: `~/.claude/semantic-memory/memory.db` |
+| `MEMORY_DB_PATH` | No | Database path. Default: `~/.claude/sem-mem/memory.db` |
 | `EMBEDDING_PROVIDER` | No | `openai` (default) or `bedrock` |
 | `LLM_PROVIDER` | No | `anthropic` (default) or `bedrock` |
 | `AWS_PROFILE` | No | AWS SSO profile name (required for Bedrock) |
@@ -78,14 +78,14 @@ Add to your MCP settings (see `mcp-config-example.json`):
 ```json
 {
   "mcpServers": {
-    "semantic-memory": {
+    "sem-mem": {
       "command": "python3",
-      "args": ["-m", "semantic_memory.server"],
+      "args": ["-m", "sem_mem.server"],
       "env": {
-        "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
+        "MEMORY_DB_PATH": "~/.claude/sem-mem/memory.db",
         "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       },
-      "cwd": "/path/to/semantic-memory/src"
+      "cwd": "/path/to/sem-mem/src"
     }
   }
 }
@@ -98,17 +98,17 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 ```json
 {
   "mcpServers": {
-    "semantic-memory": {
+    "sem-mem": {
       "command": "python3",
-      "args": ["-m", "semantic_memory.server"],
+      "args": ["-m", "sem_mem.server"],
       "env": {
-        "MEMORY_DB_PATH": "~/.claude/semantic-memory/memory.db",
+        "MEMORY_DB_PATH": "~/.claude/sem-mem/memory.db",
         "EMBEDDING_PROVIDER": "bedrock",
         "LLM_PROVIDER": "bedrock",
         "AWS_PROFILE": "your-sso-profile",
         "AWS_REGION": "us-east-1"
       },
-      "cwd": "/path/to/semantic-memory/src"
+      "cwd": "/path/to/sem-mem/src"
     }
   }
 }
@@ -212,9 +212,9 @@ Migrations run automatically on startup. Currently at version 4.
 This repo is also a Claude Code plugin. Install with:
 
 ```bash
-claude plugin install semantic-memory@brainspace
+claude plugin install sem-mem@brainspace
 ```
 
 Includes:
-- **Skill** (`using-semantic-memory`) — search strategy guide, subject kinds/relations reference, best practices
+- **Skill** (`using-sem-mem`) — search strategy guide, subject kinds/relations reference, best practices
 - **PreCompact hook** — prompts Claude to store key insights before context compaction
