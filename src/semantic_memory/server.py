@@ -67,7 +67,8 @@ class SemanticMemoryApp:
             return "No insights stored."
         lines = []
         for i in results:
-            lines.append(f"[{i.id[:8]}] ({i.frame.value}) {i.normalized_text}")
+            short_id = (i.id or "unknown")[:8]
+            lines.append(f"[{short_id}] ({i.frame.value}) {i.normalized_text}")
             if i.domains:
                 lines.append(f"  Domains: {', '.join(i.domains)}")
         return "\n".join(lines)
