@@ -87,6 +87,45 @@ class SemanticMemoryApp:
                 lines.append(f"  Domains: {', '.join(i.domains)}")
         return "\n".join(lines)
 
+    async def related_insights(self, insight_id: str, limit: int = 10) -> str:
+        results = await self.store.related_insights(insight_id, limit=limit)
+        if not results:
+            return "No related insights found."
+        lines = [f"- [{r.insight.id}] (score={r.score:.3f}) {r.insight.normalized_text}" for r in results]
+        return f"Found {len(results)} related insight(s):\n" + "\n".join(lines)
+
+    async def add_subject_relation(
+        self, from_name: str, from_kind: str, to_name: str, to_kind: str, relation_type: str
+    ) -> str:
+        success = await self.store.add_subject_relation(
+            from_name=from_name,
+            from_kind=from_kind,
+            to_name=to_name,
+            to_kind=to_kind,
+            relation_type=relation_type,
+        )
+        if success:
+            return f"Created relation: ({from_name}:{from_kind}) --[{relation_type}]--> ({to_name}:{to_kind})"
+        return "Failed to create relation."
+
+    async def get_subject_relations(
+        self, name: str, kind: str = "", relation_type: str = "", limit: int = 50
+    ) -> str:
+        results = await self.store.get_subject_relations(
+            name=name,
+            kind=kind or None,
+            relation_type=relation_type or None,
+            limit=limit,
+        )
+        if not results:
+            return "No relations found for that subject."
+        lines = []
+        for rel in results:
+            lines.append(
+                f"({rel['from_name']}:{rel['from_kind']}) --[{rel['relation_type']}]--> ({rel['to_name']}:{rel['to_kind']})"
+            )
+        return f"Found {len(results)} relation(s):\n" + "\n".join(lines)
+
 
 async def create_app(
     db_path: str | None = None,
@@ -155,6 +194,42 @@ def create_mcp_server() -> FastMCP:
         if app is None:
             app = await create_app()
         return await app.search_by_subject(name=name, kind=kind, limit=limit)
+
+    @mcp.tool()
+    async def related_insights(insight_id: str, limit: int = 10) -> str:
+        """Find insights related to a given insight via shared subjects. Returns insights connected through common domains, entities, problems, resolutions, or contexts."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.related_insights(insight_id=insight_id, limit=limit)
+
+    @mcp.tool()
+    async def add_subject_relation(
+        from_name: str, from_kind: str, to_name: str, to_kind: str, relation_type: str
+    ) -> str:
+        """Create a typed relation between two subjects in the knowledge graph. Valid relation types include: contains, scopes, frames, solved_by, implemented_in, applies_to, involves, has_problem, addresses, produces, works_on, authors, resolves."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.add_subject_relation(
+            from_name=from_name,
+            from_kind=from_kind,
+            to_name=to_name,
+            to_kind=to_kind,
+            relation_type=relation_type,
+        )
+
+    @mcp.tool()
+    async def get_subject_relations(
+        name: str, kind: str = "", relation_type: str = "", limit: int = 50
+    ) -> str:
+        """Get relations from a subject in the knowledge graph. Returns typed edges connecting this subject to others."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.get_subject_relations(
+            name=name, kind=kind, relation_type=relation_type, limit=limit
+        )
 
     return mcp
 
