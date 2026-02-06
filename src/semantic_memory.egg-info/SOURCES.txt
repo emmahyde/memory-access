@@ -1,8 +1,0 @@
-pyproject.toml
-src/semantic_memory/__init__.py
-src/semantic_memory.egg-info/PKG-INFO
-src/semantic_memory.egg-info/SOURCES.txt
-src/semantic_memory.egg-info/dependency_links.txt
-src/semantic_memory.egg-info/entry_points.txt
-src/semantic_memory.egg-info/requires.txt
-src/semantic_memory.egg-info/top_level.txt
