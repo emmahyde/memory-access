@@ -34,10 +34,74 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 """
 
 
+async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
+    """Create subjects and insight_subjects tables, backfill from existing data."""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS subjects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(name, kind)
+        );
+        CREATE INDEX IF NOT EXISTS idx_subjects_name ON subjects(name);
+        CREATE INDEX IF NOT EXISTS idx_subjects_kind ON subjects(kind);
+
+        CREATE TABLE IF NOT EXISTS insight_subjects (
+            insight_id TEXT NOT NULL REFERENCES insights(id) ON DELETE CASCADE,
+            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            PRIMARY KEY (insight_id, subject_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_insight_subjects_subject ON insight_subjects(subject_id);
+    """)
+    await db.commit()
+
+    # Backfill from existing insights
+    cursor = await db.execute("SELECT id, domains, entities FROM insights")
+    rows = await cursor.fetchall()
+
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        insight_id = row[0]
+        domains = json.loads(row[1]) if row[1] else []
+        entities = json.loads(row[2]) if row[2] else []
+
+        for domain in domains:
+            name = domain.strip().lower()
+            if not name:
+                continue
+            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"domain:{name}"))
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'domain', ?)",
+                (subject_id, name, now),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                (insight_id, subject_id),
+            )
+
+        for entity in entities:
+            name = entity.strip().lower()
+            if not name:
+                continue
+            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"entity:{name}"))
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'entity', ?)",
+                (subject_id, name, now),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                (insight_id, subject_id),
+            )
+
+    await db.commit()
+    return "Add subjects table and insight_subjects join table with backfill"
+
+
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = []  # list[tuple[int, Callable]]
+        self._migrations: list = [(1, _migrate_001_subject_index)]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +124,38 @@ class InsightStore:
                         (version, now, description or f"migration {version}"),
                     )
                     await db.commit()
+
+    async def _upsert_subjects(self, db, insight_id: str, domains: list[str], entities: list[str]):
+        """Maintain subjects and insight_subjects tables on insert."""
+        now = datetime.now(timezone.utc).isoformat()
+
+        for domain in domains:
+            name = domain.strip().lower()
+            if not name:
+                continue
+            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"domain:{name}"))
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'domain', ?)",
+                (subject_id, name, now),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                (insight_id, subject_id),
+            )
+
+        for entity in entities:
+            name = entity.strip().lower()
+            if not name:
+                continue
+            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"entity:{name}"))
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, 'entity', ?)",
+                (subject_id, name, now),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                (insight_id, subject_id),
+            )
 
     async def insert(self, insight: Insight, embedding: np.ndarray | None = None) -> str:
         insight_id = insight.id or str(uuid.uuid4())
@@ -86,6 +182,14 @@ class InsightStore:
                     now,
                 ),
             )
+
+            # Check if subjects table exists (migration may not have run yet)
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='subjects'"
+            )
+            if await cursor.fetchone():
+                await self._upsert_subjects(db, insight_id, insight.domains, insight.entities)
+
             await db.commit()
         return insight_id
 
@@ -194,6 +298,33 @@ class InsightStore:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [_row_to_insight(row) for row in rows]
+
+    async def search_by_subject(
+        self, name: str, kind: str | None = None, limit: int = 20
+    ) -> list[Insight]:
+        name = name.strip().lower()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if kind:
+                cursor = await db.execute(
+                    """SELECT i.* FROM insights i
+                       JOIN insight_subjects isub ON i.id = isub.insight_id
+                       JOIN subjects s ON isub.subject_id = s.id
+                       WHERE s.name = ? AND s.kind = ?
+                       ORDER BY i.created_at DESC LIMIT ?""",
+                    (name, kind, limit),
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT DISTINCT i.* FROM insights i
+                       JOIN insight_subjects isub ON i.id = isub.insight_id
+                       JOIN subjects s ON isub.subject_id = s.id
+                       WHERE s.name = ?
+                       ORDER BY i.created_at DESC LIMIT ?""",
+                    (name, limit),
+                )
             rows = await cursor.fetchall()
             return [_row_to_insight(row) for row in rows]
 

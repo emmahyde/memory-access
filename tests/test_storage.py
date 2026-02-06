@@ -160,6 +160,7 @@ class TestMigrationInfrastructure:
 
     async def test_schema_version_starts_at_zero(self, tmp_db):
         store = InsightStore(tmp_db)
+        store._migrations = []  # Clear migrations for this test
         await store.initialize()
         import aiosqlite
         async with aiosqlite.connect(tmp_db) as db:
@@ -225,3 +226,122 @@ class TestMigrationInfrastructure:
         retrieved = await store.get(iid)
         assert retrieved is not None
         assert retrieved.text == "survive"
+
+
+class TestSubjectIndex:
+    async def test_migration_001_creates_tables(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='subjects'"
+            )
+            assert await cursor.fetchone() is not None
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='insight_subjects'"
+            )
+            assert await cursor.fetchone() is not None
+
+    async def test_migration_001_backfills_domains(self, tmp_db):
+        store = InsightStore(tmp_db)
+        # Temporarily remove migration to insert raw data first
+        saved_migrations = store._migrations
+        store._migrations = []
+        await store.initialize()
+
+        insight = Insight(
+            text="test", normalized_text="test", frame=Frame.CAUSAL,
+            domains=["react", "frontend"], entities=["React"]
+        )
+        await store.insert(insight)
+
+        # Now apply migration
+        store._migrations = saved_migrations
+        await store.initialize()
+
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM subjects ORDER BY name")
+            rows = await cursor.fetchall()
+            subjects = [(r["name"], r["kind"]) for r in rows]
+            assert ("react", "domain") in subjects
+            assert ("frontend", "domain") in subjects
+            assert ("react", "entity") in subjects  # React entity (lowercased)
+
+    async def test_insert_maintains_subjects(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="new", normalized_text="new", frame=Frame.PATTERN,
+            domains=["python", "testing"], entities=["pytest"]
+        )
+        await store.insert(insight)
+
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT name, kind FROM subjects ORDER BY name")
+            rows = await cursor.fetchall()
+            subjects = [(r["name"], r["kind"]) for r in rows]
+            assert ("python", "domain") in subjects
+            assert ("testing", "domain") in subjects
+            assert ("pytest", "entity") in subjects
+
+            # Verify join table
+            cursor = await db.execute("SELECT COUNT(*) FROM insight_subjects")
+            row = await cursor.fetchone()
+            assert row[0] == 3  # 2 domains + 1 entity
+
+    async def test_insert_deduplicates_subjects(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        for _ in range(3):
+            insight = Insight(
+                text="dup", normalized_text="dup", frame=Frame.CAUSAL,
+                domains=["python"], entities=[]
+            )
+            await store.insert(insight)
+
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM subjects WHERE name='python'")
+            row = await cursor.fetchone()
+            assert row[0] == 1  # deduplicated
+
+    async def test_search_by_subject(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        i1 = Insight(text="python stuff", normalized_text="python stuff", frame=Frame.PATTERN, domains=["python"])
+        i2 = Insight(text="rust stuff", normalized_text="rust stuff", frame=Frame.PATTERN, domains=["rust"])
+        await store.insert(i1)
+        await store.insert(i2)
+
+        results = await store.search_by_subject("python")
+        assert len(results) == 1
+        assert results[0].text == "python stuff"
+
+    async def test_search_by_subject_with_kind_filter(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        # "react" as both domain and entity
+        insight = Insight(
+            text="react", normalized_text="react", frame=Frame.CAUSAL,
+            domains=["react"], entities=["React"]  # React lowercases to "react"
+        )
+        await store.insert(insight)
+
+        # Search without kind filter — should find it
+        results = await store.search_by_subject("react")
+        assert len(results) == 1
+
+        # Search with kind filter
+        results = await store.search_by_subject("react", kind="domain")
+        assert len(results) == 1
+        results = await store.search_by_subject("react", kind="entity")
+        assert len(results) == 1
