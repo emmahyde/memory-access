@@ -25,16 +25,41 @@ CREATE TABLE IF NOT EXISTS insights (
 CREATE INDEX IF NOT EXISTS idx_insights_frame ON insights(frame);
 """
 
+SCHEMA_VERSIONS = """\
+CREATE TABLE IF NOT EXISTS schema_versions (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT NOT NULL
+);
+"""
+
 
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
+        self._migrations: list = []  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
+            await db.executescript(SCHEMA_VERSIONS)
             await db.commit()
+
+            # Run pending migrations
+            cursor = await db.execute("SELECT MAX(version) FROM schema_versions")
+            row = await cursor.fetchone()
+            current_version = row[0] if row[0] is not None else 0
+
+            for version, migrate_fn in sorted(self._migrations):
+                if version > current_version:
+                    description = await migrate_fn(db)
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.execute(
+                        "INSERT INTO schema_versions (version, applied_at, description) VALUES (?, ?, ?)",
+                        (version, now, description or f"migration {version}"),
+                    )
+                    await db.commit()
 
     async def insert(self, insight: Insight, embedding: np.ndarray | None = None) -> str:
         insight_id = insight.id or str(uuid.uuid4())
