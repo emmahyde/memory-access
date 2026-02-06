@@ -73,6 +73,20 @@ class SemanticMemoryApp:
                 lines.append(f"  Domains: {', '.join(i.domains)}")
         return "\n".join(lines)
 
+    async def search_by_subject(self, name: str, kind: str = "", limit: int = 20) -> str:
+        results = await self.store.search_by_subject(
+            name=name, kind=kind or None, limit=limit
+        )
+        if not results:
+            return "No insights found for that subject."
+        lines = []
+        for i in results:
+            short_id = (i.id or "unknown")[:8]
+            lines.append(f"[{short_id}] ({i.frame.value}) {i.normalized_text}")
+            if i.domains:
+                lines.append(f"  Domains: {', '.join(i.domains)}")
+        return "\n".join(lines)
+
 
 async def create_app(
     db_path: str | None = None,
@@ -133,6 +147,14 @@ def create_mcp_server() -> FastMCP:
         if app is None:
             app = await create_app()
         return await app.list_insights(domain=domain, frame=frame, limit=limit)
+
+    @mcp.tool()
+    async def search_by_subject(name: str, kind: str = "", limit: int = 20) -> str:
+        """Search for insights by subject name (domain, entity, or other subject kind). Returns insights tagged with that subject."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.search_by_subject(name=name, kind=kind, limit=limit)
 
     return mcp
 

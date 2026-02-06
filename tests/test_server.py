@@ -182,3 +182,33 @@ class TestListInsights:
         result = await app.list_insights(frame="causal")
         assert "A causes B" in result
         assert "C requires D" not in result
+
+
+class TestSearchBySubject:
+    @pytest.mark.asyncio
+    async def test_search_by_subject_returns_matching(self, tmp_db):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_anthropic_response(json.dumps(["Docker insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "pattern", "normalized": "Docker pattern", "entities": ["Docker"],
+            })),
+            _mock_anthropic_response(json.dumps(["Python insight"])),
+            _mock_anthropic_response(json.dumps({
+                "frame": "causal", "normalized": "Python causes X", "entities": ["Python"],
+            })),
+        ]
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        await app.store_insight(text="Docker insight", domain="devops")
+        await app.store_insight(text="Python insight", domain="python")
+
+        result = await app.search_by_subject(name="devops")
+        assert "Docker pattern" in result
+        assert "Python" not in result
+
+    @pytest.mark.asyncio
+    async def test_search_by_subject_empty(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client)
+        result = await app.search_by_subject(name="nonexistent")
+        assert "No insights found" in result
