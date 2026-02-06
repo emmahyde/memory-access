@@ -2,22 +2,56 @@
 
 An MCP server that gives AI agents persistent, intent-based memory. Text is decomposed into atomic insights, classified into semantic frames, embedded as vectors, and stored in a SQLite knowledge graph with subject indexing.
 
-## Install
+## Quick Start
+
+### 1. Clone and install
 
 ```bash
-# From PyPI
-pip install sem-mem
-
-# Or with uv
-uv add sem-mem
-
-# From source (development)
 git clone https://github.com/emmahyde/brainspace.git
 cd brainspace
 uv sync --group dev
 ```
 
+Or install from PyPI:
+
+```bash
+pip install sem-mem
+# or
+uv add sem-mem
+```
+
 Requires Python 3.12+.
+
+### 2. Set environment variables
+
+For OpenAI + Anthropic (default):
+
+```bash
+export OPENAI_API_KEY=...
+export ANTHROPIC_API_KEY=...
+```
+
+For AWS Bedrock:
+
+```bash
+export EMBEDDING_PROVIDER=bedrock
+export LLM_PROVIDER=bedrock
+export AWS_PROFILE=your-sso-profile
+export AWS_REGION=us-east-1
+```
+
+### 3. Install the Claude Code plugin
+
+```bash
+claude plugin install semantic-memory@brainspace
+```
+
+### 4. Verify
+
+```bash
+uv run pytest          # 85 tests pass
+uv run semantic-memory # server starts
+```
 
 ## Configuration
 
@@ -175,10 +209,10 @@ Migrations run automatically on startup. Currently at version 4.
 
 ## Claude Code Plugin
 
-The `plugin/` directory contains a Claude Code plugin that teaches Claude how to use the semantic-memory MCP tools effectively. To install, symlink or copy it into your plugins directory:
+This repo is also a Claude Code plugin. Install with:
 
 ```bash
-ln -s "$(pwd)/plugin" ~/.claude/plugins/local/semantic-memory
+claude plugin install semantic-memory@brainspace
 ```
 
 Includes:

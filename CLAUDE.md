@@ -72,4 +72,4 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 
 ## Plugin
 
-The `plugin/` directory contains a Claude Code plugin for teaching Claude how to use the semantic-memory MCP tools. It includes a skill (`using-semantic-memory`) and a `PreCompact` hook that prompts Claude to store insights before context compaction.
+This repo is also a Claude Code plugin (`claude plugin install semantic-memory@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.
