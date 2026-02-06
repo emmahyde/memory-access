@@ -76,7 +76,7 @@ class SemanticMemoryApp:
 
 async def create_app(
     db_path: str | None = None,
-    embedding_model: str = "all-MiniLM-L6-v2",
+    embedding_model: str = "text-embedding-3-small",
     anthropic_client: anthropic.Anthropic | None = None,
 ) -> SemanticMemoryApp:
     db_path = db_path or os.environ.get(
