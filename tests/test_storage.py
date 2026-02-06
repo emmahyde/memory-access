@@ -634,3 +634,138 @@ class TestAutoRelateSubjects:
         resolution_names = {r["to_name"] for r in relations}
         assert resolution_names == {"connection pooling", "mutex lock", "async queue"}
         assert all(r["relation_type"] == "solved_by" for r in relations)
+
+
+class TestGitContextSubjects:
+    async def test_repo_project_creates_contains_relation(self, tmp_db):
+        """Test that repo + project creates repo→contains→project relation."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="test insight",
+            normalized_text="test insight",
+            frame=Frame.CAUSAL,
+        )
+        await store.insert(insight, repo="semantic-memory", project="mcp-server")
+
+        # Check that the contains relation was created
+        relations = await store.get_subject_relations("semantic-memory", kind="repo")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "mcp-server"
+        assert relations[0]["relation_type"] == "contains"
+
+    async def test_author_pr_creates_authors_relation(self, tmp_db):
+        """Test that author + pr creates person→authors→pr relation."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="test insight",
+            normalized_text="test insight",
+            frame=Frame.CAUSAL,
+        )
+        await store.insert(insight, author="alice", pr="PR-123")
+
+        # Check that the authors relation was created
+        relations = await store.get_subject_relations("alice", kind="person")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "pr-123"
+        assert relations[0]["relation_type"] == "authors"
+
+    async def test_task_pr_creates_produces_relation(self, tmp_db):
+        """Test that task + pr creates task→produces→pr relation."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="test insight",
+            normalized_text="test insight",
+            frame=Frame.CAUSAL,
+        )
+        await store.insert(insight, task="add-auth", pr="PR-456")
+
+        # Check that the produces relation was created
+        relations = await store.get_subject_relations("add-auth", kind="task")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "pr-456"
+        assert relations[0]["relation_type"] == "produces"
+
+    async def test_all_git_params_creates_all_relations(self, tmp_db):
+        """Test that all git params create all expected relations."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="test insight",
+            normalized_text="test insight",
+            frame=Frame.CAUSAL,
+        )
+        await store.insert(
+            insight,
+            repo="semantic-memory",
+            project="mcp-server",
+            task="add-auth",
+            pr="PR-789",
+            author="bob",
+        )
+
+        # Check repo→contains→project
+        relations = await store.get_subject_relations("semantic-memory", kind="repo")
+        assert any(r["to_name"] == "mcp-server" and r["relation_type"] == "contains" for r in relations)
+
+        # Check project→contains→task
+        relations = await store.get_subject_relations("mcp-server", kind="project")
+        assert any(r["to_name"] == "add-auth" and r["relation_type"] == "contains" for r in relations)
+
+        # Check task→produces→pr
+        relations = await store.get_subject_relations("add-auth", kind="task")
+        assert any(r["to_name"] == "pr-789" and r["relation_type"] == "produces" for r in relations)
+
+        # Check person→authors→pr
+        relations = await store.get_subject_relations("bob", kind="person")
+        assert any(r["to_name"] == "pr-789" and r["relation_type"] == "authors" for r in relations)
+
+        # Check person→works_on→project
+        assert any(r["to_name"] == "mcp-server" and r["relation_type"] == "works_on" for r in relations)
+
+    async def test_no_git_params_creates_no_git_subjects(self, tmp_db):
+        """Test that insight without git params creates no git subjects."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="test insight",
+            normalized_text="test insight",
+            frame=Frame.CAUSAL,
+        )
+        await store.insert(insight)
+
+        # Check that no git subjects were created
+        import aiosqlite
+
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            for kind in ["repo", "pr", "person", "project", "task"]:
+                cursor = await db.execute("SELECT COUNT(*) FROM subjects WHERE kind=?", (kind,))
+                row = await cursor.fetchone()
+                assert row[0] == 0
+
+    async def test_resolution_pr_creates_implemented_in_relation(self, tmp_db):
+        """Test that insight with resolution + pr creates resolution→implemented_in→pr relation."""
+        store = InsightStore(tmp_db)
+        await store.initialize()
+
+        insight = Insight(
+            text="fixed memory leak",
+            normalized_text="fixed memory leak",
+            frame=Frame.CAUSAL,
+            resolutions=["added connection pooling"],
+        )
+        await store.insert(insight, pr="PR-999")
+
+        # Check that the implemented_in relation was created
+        relations = await store.get_subject_relations("added connection pooling", kind="resolution")
+        assert len(relations) == 1
+        assert relations[0]["to_name"] == "pr-999"
+        assert relations[0]["relation_type"] == "implemented_in"

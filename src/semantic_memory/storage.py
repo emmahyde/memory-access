@@ -228,6 +228,84 @@ class InsightStore:
                     (insight_id, subject_id),
                 )
 
+    async def _upsert_git_subjects(
+        self,
+        db,
+        insight_id: str,
+        insight: Insight,
+        repo: str = "",
+        pr: str = "",
+        author: str = "",
+        project: str = "",
+        task: str = "",
+    ):
+        """Create git context subjects and relations."""
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Create git subjects and link to insight
+        git_params = [
+            ("repo", repo),
+            ("pr", pr),
+            ("person", author),
+            ("project", project),
+            ("task", task),
+        ]
+
+        subject_ids = {}
+        for kind, name in git_params:
+            if not name:
+                continue
+            name_lower = name.strip().lower()
+            subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{kind}:{name_lower}"))
+            subject_ids[kind] = subject_id
+            await db.execute(
+                "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
+                (subject_id, name_lower, kind, now),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO insight_subjects (insight_id, subject_id) VALUES (?, ?)",
+                (insight_id, subject_id),
+            )
+
+        # Create subject relations
+        relations = []
+
+        # repo→contains→project
+        if "repo" in subject_ids and "project" in subject_ids:
+            relations.append((subject_ids["repo"], "contains", subject_ids["project"]))
+
+        # project→contains→task
+        if "project" in subject_ids and "task" in subject_ids:
+            relations.append((subject_ids["project"], "contains", subject_ids["task"]))
+
+        # task→produces→pr
+        if "task" in subject_ids and "pr" in subject_ids:
+            relations.append((subject_ids["task"], "produces", subject_ids["pr"]))
+
+        # person→authors→pr
+        if "person" in subject_ids and "pr" in subject_ids:
+            relations.append((subject_ids["person"], "authors", subject_ids["pr"]))
+
+        # person→works_on→project
+        if "person" in subject_ids and "project" in subject_ids:
+            relations.append((subject_ids["person"], "works_on", subject_ids["project"]))
+
+        # resolution→implemented_in→pr
+        if "pr" in subject_ids and insight.resolutions:
+            for resolution_name in insight.resolutions:
+                name_lower = resolution_name.strip().lower()
+                if not name_lower:
+                    continue
+                resolution_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"resolution:{name_lower}"))
+                relations.append((resolution_id, "implemented_in", subject_ids["pr"]))
+
+        # Insert relations
+        for from_id, relation_type, to_id in relations:
+            await db.execute(
+                "INSERT OR IGNORE INTO subject_relations (from_subject_id, relation_type, to_subject_id, created_at) VALUES (?, ?, ?, ?)",
+                (from_id, relation_type, to_id, now),
+            )
+
     async def _auto_relate_subjects(self, db, insight: Insight):
         """Auto-populate subject relations when subjects co-occur in the same insight."""
         now = datetime.now(timezone.utc).isoformat()
@@ -266,7 +344,16 @@ class InsightStore:
                         (from_subject_id, to_subject_id, relation_type, now),
                     )
 
-    async def insert(self, insight: Insight, embedding: np.ndarray | None = None) -> str:
+    async def insert(
+        self,
+        insight: Insight,
+        embedding: np.ndarray | None = None,
+        repo: str = "",
+        pr: str = "",
+        author: str = "",
+        project: str = "",
+        task: str = "",
+    ) -> str:
         insight_id = insight.id or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         embedding_bytes = embedding.tobytes() if embedding is not None else None
@@ -308,6 +395,12 @@ class InsightStore:
                 )
                 if await cursor.fetchone():
                     await self._auto_relate_subjects(db, insight)
+
+                    # Add git context subjects if provided
+                    if repo or pr or author or project or task:
+                        await self._upsert_git_subjects(
+                            db, insight_id, insight, repo=repo, pr=pr, author=author, project=project, task=task
+                        )
 
             await db.commit()
         return insight_id

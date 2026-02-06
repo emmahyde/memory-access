@@ -18,13 +18,25 @@ class SemanticMemoryApp:
         self.embeddings = embeddings
         self.normalizer = normalizer
 
-    async def store_insight(self, text: str, domain: str = "", source: str = "") -> str:
+    async def store_insight(
+        self,
+        text: str,
+        domain: str = "",
+        source: str = "",
+        repo: str = "",
+        pr: str = "",
+        author: str = "",
+        project: str = "",
+        task: str = "",
+    ) -> str:
         domains = [d.strip() for d in domain.split(",") if d.strip()] if domain else []
         insights = await self.normalizer.normalize(text, source=source, domains=domains)
         ids = []
         for insight in insights:
             emb = self.embeddings.embed(insight.normalized_text)
-            insight_id = await self.store.insert(insight, emb)
+            insight_id = await self.store.insert(
+                insight, emb, repo=repo, pr=pr, author=author, project=project, task=task
+            )
             ids.append(insight_id)
         return f"Stored {len(ids)} insight(s): {', '.join(ids)}"
 
@@ -148,12 +160,23 @@ def create_mcp_server() -> FastMCP:
     app: SemanticMemoryApp | None = None
 
     @mcp.tool()
-    async def store_insight(text: str, domain: str = "", source: str = "") -> str:
-        """Store a new insight. Text is decomposed into atomic insights, normalized into canonical semantic frames, embedded, and stored for intent-based retrieval."""
+    async def store_insight(
+        text: str,
+        domain: str = "",
+        source: str = "",
+        repo: str = "",
+        pr: str = "",
+        author: str = "",
+        project: str = "",
+        task: str = "",
+    ) -> str:
+        """Store a new insight. Text is decomposed into atomic insights, normalized into canonical semantic frames, embedded, and stored for intent-based retrieval. Optional git context (repo, pr, author, project, task) creates subjects and relations in the knowledge graph."""
         nonlocal app
         if app is None:
             app = await create_app()
-        return await app.store_insight(text=text, domain=domain, source=source)
+        return await app.store_insight(
+            text=text, domain=domain, source=source, repo=repo, pr=pr, author=author, project=project, task=task
+        )
 
     @mcp.tool()
     async def search_insights(query: str, domain: str = "", limit: int = 5) -> str:

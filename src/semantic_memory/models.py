@@ -34,6 +34,16 @@ class Insight(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class GitContext(BaseModel):
+    """Optional git metadata to associate with insights."""
+
+    repo: str = ""
+    pr: str = ""
+    author: str = ""
+    project: str = ""
+    task: str = ""
+
+
 class SearchResult(BaseModel):
     """An insight with its similarity score from a search query."""
 
