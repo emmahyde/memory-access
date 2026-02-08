@@ -77,7 +77,10 @@ class BedrockEmbeddingEngine:
         return vec / norm if norm > 0 else vec
 
     def embed_batch(self, texts: list[str]) -> np.ndarray:
-        vecs = np.array([self._invoke(t) for t in texts], dtype=np.float32)
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(self._invoke, texts))
+        vecs = np.array(results, dtype=np.float32)
         norms = np.linalg.norm(vecs, axis=1, keepdims=True)
         norms[norms == 0] = 1
         return vecs / norms

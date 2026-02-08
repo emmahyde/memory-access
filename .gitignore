@@ -6,3 +6,4 @@ build/
 .eggs/
 *.db
 .venv/
+data/
