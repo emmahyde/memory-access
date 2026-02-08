@@ -5,8 +5,8 @@
   "author": {
     "name": "Emma Hyde"
   },
-  "homepage": "https://github.com/emmahyde/brainspace",
-  "repository": "https://github.com/emmahyde/brainspace",
-  "license": "MIT",
+  "homepage": "https://github.com/emmahyde/memory-access",
+  "repository": "https://github.com/emmahyde/memory-access",
+  "license": "Apache-2.0",
   "keywords": ["memory-access", "mcp", "knowledge-graph", "embeddings", "insights"]
 }

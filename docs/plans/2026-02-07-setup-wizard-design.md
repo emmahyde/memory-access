@@ -8,7 +8,7 @@ A Claude Code slash command (`/setup-memory-access`) that interactively configur
 
 1. **Check prerequisites** - Is `uv` installed?
 2. **Install MCP server** - `uv tool install memory-access` (skip if already installed)
-3. **Install plugin** - `claude plugin install memory-access@brainspace` (skip if already enabled)
+3. **Install plugin** - `claude plugin install memory-access@emmahyde` (skip if already enabled)
 4. **Choose LLM provider** - Anthropic (default) or Bedrock
 5. **Choose embedding provider** - OpenAI (default) or Bedrock
 6. **Collect credentials** - Based on provider choices, check if required env vars exist in shell. If missing, prompt user to provide them.

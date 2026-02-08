@@ -1,6 +1,24 @@
 [project]
 name = "memory-access"
 version = "0.1.2"
+description = "An MCP server that gives AI agents persistent, intent-based memory with vector embeddings and semantic indexing."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Emma Hyde", email = "emmajhyde@gmail.com"},
+]
+keywords = ["mcp", "semantic-memory", "knowledge-graph", "embeddings", "ai-agents", "claude"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=1.25.0",
@@ -12,6 +30,12 @@ dependencies = [
     "boto3>=1.35.0",
     "firecrawl-py>=1.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/emmahyde/memory-access"
+Repository = "https://github.com/emmahyde/memory-access"
+Documentation = "https://github.com/emmahyde/memory-access/blob/main/README.md"
+Issues = "https://github.com/emmahyde/memory-access/issues"
 
 [dependency-groups]
 dev = [

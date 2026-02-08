@@ -7,8 +7,8 @@ An MCP server that gives AI agents persistent, intent-based memory. Text is deco
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/emmahyde/brainspace.git
-cd brainspace
+git clone https://github.com/emmahyde/memory-access.git
+cd memory-access
 uv sync --group dev
 ```
 
@@ -43,7 +43,7 @@ export AWS_REGION=us-east-1
 ### 3. Install the Claude Code plugin
 
 ```bash
-claude plugin install memory-access@brainspace
+claude plugin install memory-access@emmahyde
 ```
 
 ### 4. Set up knowledge base support (optional)
@@ -312,7 +312,7 @@ Migrations run automatically on startup. Currently at version 5.
 This repo is also a Claude Code plugin. Install with:
 
 ```bash
-claude plugin install memory-access@brainspace
+claude plugin install memory-access@emmahyde
 ```
 
 Includes:

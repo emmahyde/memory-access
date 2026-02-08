@@ -1,5 +1,5 @@
 {
-  "name": "brainspace",
+  "name": "memory-access",
   "description": "Semantic memory MCP server for persistent knowledge storage, retrieval, and graph traversal",
   "owner": {
     "name": "Emma Hyde"

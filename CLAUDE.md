@@ -72,4 +72,4 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 
 ## Plugin
 
-This repo is also a Claude Code plugin (`claude plugin install memory-access@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.
+This repo is also a Claude Code plugin (`claude plugin install memory-access@emmahyde`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.

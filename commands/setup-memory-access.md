@@ -31,10 +31,10 @@ Run `uv tool list` and check if `memory-access` appears in the output.
 
 ## Step 3: Install plugin
 
-Read `~/.claude/settings.json` and check if `"memory-access@brainspace": true` appears in `enabledPlugins`.
+Read `~/.claude/settings.json` and check if `"memory-access@emmahyde": true` appears in `enabledPlugins`.
 
 - If already enabled, report "memory-access plugin is already enabled" and continue.
-- If not enabled, run `claude plugin install memory-access@brainspace` and confirm it succeeds.
+- If not enabled, run `claude plugin install memory-access@emmahyde` and confirm it succeeds.
 
 ## Step 4: Choose providers
 
@@ -277,7 +277,7 @@ After all steps complete, display a summary:
 ## memory-access Setup Complete
 
 **MCP server**: installed via uv
-**Plugin**: memory-access@brainspace enabled
+**Plugin**: memory-access@emmahyde enabled
 **LLM provider**: <choice>
 **Embedding provider**: <choice>
 **Database**: <path>

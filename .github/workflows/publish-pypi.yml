@@ -1,0 +1,71 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/memory-access
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: pip install build
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Validate version matches
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PYPROJECT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "$VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "Tag version ($VERSION) does not match pyproject.toml ($PYPROJECT_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version $VERSION matches"
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            Released on PyPI: https://pypi.org/project/memory-access/${{ steps.version.outputs.version }}/
+
+            Install with:
+            ```bash
+            pip install memory-access==${{ steps.version.outputs.version }}
+            ```
+            or
+            ```bash
+            uv add memory-access==${{ steps.version.outputs.version }}
+            ```
+          files: dist/*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
