@@ -9,6 +9,10 @@ permissions:
 
 jobs:
   release:
+    concurrency:
+      group: release
+      cancel-in-progress: false
+
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip release]')"
 
@@ -76,14 +80,23 @@ jobs:
 
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create annotated tag (atomic operation)
+      - name: Commit version bump
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add pyproject.toml
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
+
+          # Get the commit SHA for tagging
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Create annotated tag
         id: create_tag
         run: |
           TAG="v${{ steps.bump_version.outputs.new_version }}"
-
-          # Create an annotated tag with the bump type and new version
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git tag -a "$TAG" \
             -m "Release $TAG" \
@@ -95,12 +108,7 @@ jobs:
 
       - name: Push version bump and tag
         run: |
-          # Push the updated pyproject.toml file
-          git add pyproject.toml
-          git commit --allow-empty -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
           git push
-
-          # Push the tag (this triggers publish-pypi.yml)
           git push origin "${{ steps.create_tag.outputs.tag }}"
 
       - name: Create GitHub Release
