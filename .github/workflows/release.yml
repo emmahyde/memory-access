@@ -10,7 +10,7 @@ permissions:
 jobs:
   release:
     concurrency:
-      group: release
+      group: release-and-publish
       cancel-in-progress: false
 
     runs-on: ubuntu-latest
@@ -106,13 +106,16 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Created tag: $TAG"
 
-      - name: Push version bump and tag
+      - name: Push commit and tag, then create release (atomic sequence)
         run: |
+          # Push commit to main
           git push
+
+          # Push tag to GitHub (this triggers publish-pypi.yml)
           git push origin "${{ steps.create_tag.outputs.tag }}"
 
-      - name: Create GitHub Release
-        run: |
+          # Create GitHub Release immediately after tag push
+          # This minimizes the race condition window
           gh release create "${{ steps.create_tag.outputs.tag }}" \
             --title "Release ${{ steps.create_tag.outputs.tag }}" \
             --generate-notes

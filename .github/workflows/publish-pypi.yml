@@ -11,6 +11,10 @@ permissions:
 jobs:
   publish:
     name: Publish to PyPI
+    concurrency:
+      group: release-and-publish
+      cancel-in-progress: false
+
     runs-on: ubuntu-latest
 
     steps:
