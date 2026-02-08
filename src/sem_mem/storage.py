@@ -6,7 +6,7 @@ from pathlib import Path
 import aiosqlite
 import numpy as np
 
-from .models import Frame, Insight, SearchResult
+from .models import Frame, Insight, KbChunk, KnowledgeBase, SearchResult
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS insights (
@@ -176,10 +176,67 @@ async def _migrate_001_subject_index(db: aiosqlite.Connection) -> str:
     return "Add subjects table and insight_subjects join table with backfill"
 
 
+async def _migrate_005_knowledge_bases(db: aiosqlite.Connection) -> str:
+    """Create knowledge_bases, kb_chunks, kb_chunk_subjects, kb_insight_relations tables."""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS knowledge_bases (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            source_type TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_name ON knowledge_bases(name);
+
+        CREATE TABLE IF NOT EXISTS kb_chunks (
+            id TEXT PRIMARY KEY,
+            kb_id TEXT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+            text TEXT NOT NULL,
+            normalized_text TEXT NOT NULL,
+            frame TEXT NOT NULL,
+            domains TEXT NOT NULL DEFAULT '[]',
+            entities TEXT NOT NULL DEFAULT '[]',
+            problems TEXT NOT NULL DEFAULT '[]',
+            resolutions TEXT NOT NULL DEFAULT '[]',
+            contexts TEXT NOT NULL DEFAULT '[]',
+            confidence REAL NOT NULL DEFAULT 1.0,
+            source_url TEXT NOT NULL DEFAULT '',
+            embedding BLOB,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_chunks_kb_id ON kb_chunks(kb_id);
+        CREATE INDEX IF NOT EXISTS idx_kb_chunks_frame ON kb_chunks(frame);
+        CREATE INDEX IF NOT EXISTS idx_kb_chunks_source_url ON kb_chunks(source_url);
+
+        CREATE TABLE IF NOT EXISTS kb_chunk_subjects (
+            kb_chunk_id TEXT NOT NULL REFERENCES kb_chunks(id) ON DELETE CASCADE,
+            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            PRIMARY KEY (kb_chunk_id, subject_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_chunk_subjects_subject ON kb_chunk_subjects(subject_id);
+
+        CREATE TABLE IF NOT EXISTS kb_insight_relations (
+            kb_chunk_id TEXT NOT NULL REFERENCES kb_chunks(id) ON DELETE CASCADE,
+            insight_id TEXT NOT NULL REFERENCES insights(id) ON DELETE CASCADE,
+            relation_type TEXT NOT NULL,
+            weight REAL NOT NULL DEFAULT 1.0,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (kb_chunk_id, insight_id, relation_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_insight_rel_chunk ON kb_insight_relations(kb_chunk_id);
+        CREATE INDEX IF NOT EXISTS idx_kb_insight_rel_insight ON kb_insight_relations(insight_id);
+        CREATE INDEX IF NOT EXISTS idx_kb_insight_rel_type ON kb_insight_relations(relation_type);
+    """)
+    await db.commit()
+    return "Add knowledge_bases, kb_chunks, kb_chunk_subjects, kb_insight_relations tables"
+
+
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations), (4, _migrate_004_subject_relations)]  # list[tuple[int, Callable]]
+        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations), (4, _migrate_004_subject_relations), (5, _migrate_005_knowledge_bases)]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -627,6 +684,172 @@ class InsightStore:
             rows = await cursor.fetchall()
             return [{"to_name": r["to_name"], "to_kind": r["to_kind"], "relation_type": r["relation_type"]} for r in rows]
 
+    async def create_kb(self, name: str, description: str = "", source_type: str = "") -> str:
+        """Create a new knowledge base. Returns its id."""
+        kb_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO knowledge_bases (id, name, description, source_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (kb_id, name, description, source_type, now, now),
+            )
+            await db.commit()
+        return kb_id
+
+    async def get_kb(self, kb_id: str) -> KnowledgeBase | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM knowledge_bases WHERE id = ?", (kb_id,))
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return _row_to_knowledge_base(row)
+
+    async def get_kb_by_name(self, name: str) -> KnowledgeBase | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM knowledge_bases WHERE name = ?", (name,))
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return _row_to_knowledge_base(row)
+
+    async def list_kbs(self) -> list[KnowledgeBase]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM knowledge_bases ORDER BY created_at DESC")
+            rows = await cursor.fetchall()
+            return [_row_to_knowledge_base(row) for row in rows]
+
+    async def delete_kb(self, kb_id: str) -> bool:
+        """Delete a KB and all its chunks (CASCADE)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA foreign_keys = ON")
+            cursor = await db.execute("DELETE FROM knowledge_bases WHERE id = ?", (kb_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def insert_kb_chunk(self, chunk: KbChunk, embedding: np.ndarray | None = None) -> str:
+        """Insert a KB chunk with optional embedding. Returns chunk id."""
+        chunk_id = chunk.id or str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        embedding_bytes = embedding.tobytes() if embedding is not None else None
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO kb_chunks
+                   (id, kb_id, text, normalized_text, frame, domains, entities, problems, resolutions, contexts,
+                    confidence, source_url, embedding, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    chunk_id,
+                    chunk.kb_id,
+                    chunk.text,
+                    chunk.normalized_text,
+                    chunk.frame.value,
+                    json.dumps(chunk.domains),
+                    json.dumps(chunk.entities),
+                    json.dumps(chunk.problems),
+                    json.dumps(chunk.resolutions),
+                    json.dumps(chunk.contexts),
+                    chunk.confidence,
+                    chunk.source_url,
+                    embedding_bytes,
+                    now,
+                    now,
+                ),
+            )
+            await self._upsert_kb_chunk_subjects(db, chunk_id, chunk)
+            await db.commit()
+        return chunk_id
+
+    async def _upsert_kb_chunk_subjects(self, db, chunk_id: str, chunk: KbChunk):
+        """Maintain subjects and kb_chunk_subjects tables on chunk insert."""
+        now = datetime.now(timezone.utc).isoformat()
+        for kind, items in [
+            ("domain", chunk.domains),
+            ("entity", chunk.entities),
+            ("problem", chunk.problems),
+            ("resolution", chunk.resolutions),
+            ("context", chunk.contexts),
+        ]:
+            for item in items:
+                name = item.strip().lower()
+                if not name:
+                    continue
+                subject_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{kind}:{name}"))
+                await db.execute(
+                    "INSERT OR IGNORE INTO subjects (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
+                    (subject_id, name, kind, now),
+                )
+                await db.execute(
+                    "INSERT OR IGNORE INTO kb_chunk_subjects (kb_chunk_id, subject_id) VALUES (?, ?)",
+                    (chunk_id, subject_id),
+                )
+
+    async def search_kb_by_embedding(
+        self, query_embedding: np.ndarray, kb_id: str | None = None, limit: int = 5
+    ) -> list[SearchResult]:
+        """Search KB chunks by embedding similarity. If kb_id is None, search all KBs."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if kb_id:
+                cursor = await db.execute(
+                    "SELECT * FROM kb_chunks WHERE embedding IS NOT NULL AND kb_id = ?",
+                    (kb_id,),
+                )
+            else:
+                cursor = await db.execute(
+                    "SELECT * FROM kb_chunks WHERE embedding IS NOT NULL"
+                )
+            rows = await cursor.fetchall()
+
+        results = []
+        for row in rows:
+            stored_emb = np.frombuffer(row["embedding"], dtype=np.float32)
+            norm_q = np.linalg.norm(query_embedding)
+            norm_s = np.linalg.norm(stored_emb)
+            if norm_q == 0 or norm_s == 0:
+                continue
+            score = float(np.dot(query_embedding, stored_emb) / (norm_q * norm_s))
+            # Wrap KbChunk in a SearchResult using an Insight adapter for compatibility
+            chunk = _row_to_kb_chunk(row)
+            insight = Insight(
+                id=chunk.id,
+                text=chunk.text,
+                normalized_text=chunk.normalized_text,
+                frame=chunk.frame,
+                domains=chunk.domains,
+                entities=chunk.entities,
+                problems=chunk.problems,
+                resolutions=chunk.resolutions,
+                contexts=chunk.contexts,
+                confidence=chunk.confidence,
+                source=chunk.source_url,
+            )
+            results.append(SearchResult(insight=insight, score=score))
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        return results[:limit]
+
+    async def list_kb_chunks(self, kb_id: str, limit: int = 20) -> list[KbChunk]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM kb_chunks WHERE kb_id = ? ORDER BY created_at DESC LIMIT ?",
+                (kb_id, limit),
+            )
+            rows = await cursor.fetchall()
+            return [_row_to_kb_chunk(row) for row in rows]
+
+    async def delete_kb_chunks(self, kb_id: str) -> int:
+        """Delete all chunks for a KB (for refresh). Returns count deleted."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA foreign_keys = ON")
+            cursor = await db.execute("DELETE FROM kb_chunks WHERE kb_id = ?", (kb_id,))
+            await db.commit()
+            return cursor.rowcount
+
 
 def _row_to_insight(row) -> Insight:
     return Insight(
@@ -641,6 +864,36 @@ def _row_to_insight(row) -> Insight:
         contexts=json.loads(row["contexts"]) if row["contexts"] else [],
         confidence=row["confidence"],
         source=row["source"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_kb_chunk(row) -> KbChunk:
+    return KbChunk(
+        id=row["id"],
+        kb_id=row["kb_id"],
+        text=row["text"],
+        normalized_text=row["normalized_text"],
+        frame=Frame(row["frame"]),
+        domains=json.loads(row["domains"]),
+        entities=json.loads(row["entities"]),
+        problems=json.loads(row["problems"]) if row["problems"] else [],
+        resolutions=json.loads(row["resolutions"]) if row["resolutions"] else [],
+        contexts=json.loads(row["contexts"]) if row["contexts"] else [],
+        confidence=row["confidence"],
+        source_url=row["source_url"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_knowledge_base(row) -> KnowledgeBase:
+    return KnowledgeBase(
+        id=row["id"],
+        name=row["name"],
+        description=row["description"],
+        source_type=row["source_type"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
     )

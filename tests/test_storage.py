@@ -769,3 +769,189 @@ class TestGitContextSubjects:
         assert len(relations) == 1
         assert relations[0]["to_name"] == "pr-999"
         assert relations[0]["relation_type"] == "implemented_in"
+
+
+class TestKBMigration:
+    async def test_migration_005_creates_tables(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            for table in ["knowledge_bases", "kb_chunks", "kb_chunk_subjects", "kb_insight_relations"]:
+                cursor = await db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                )
+                row = await cursor.fetchone()
+                assert row is not None, f"Table {table} not created"
+
+
+class TestKBCrud:
+    async def test_create_and_get_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("rails-docs", description="Rails documentation", source_type="crawl")
+        assert isinstance(kb_id, str)
+        kb = await store.get_kb(kb_id)
+        assert kb is not None
+        assert kb.name == "rails-docs"
+        assert kb.description == "Rails documentation"
+        assert kb.source_type == "crawl"
+
+    async def test_get_kb_by_name(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("python-docs")
+        kb = await store.get_kb_by_name("python-docs")
+        assert kb is not None
+        assert kb.id == kb_id
+
+    async def test_get_nonexistent_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        assert await store.get_kb("nonexistent") is None
+        assert await store.get_kb_by_name("nonexistent") is None
+
+    async def test_list_kbs(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        await store.create_kb("kb-a")
+        await store.create_kb("kb-b")
+        kbs = await store.list_kbs()
+        assert len(kbs) == 2
+        names = {kb.name for kb in kbs}
+        assert names == {"kb-a", "kb-b"}
+
+    async def test_delete_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("to-delete")
+        assert await store.delete_kb(kb_id) is True
+        assert await store.get_kb(kb_id) is None
+
+    async def test_delete_nonexistent_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        assert await store.delete_kb("nonexistent") is False
+
+
+class TestKBChunkInsert:
+    async def test_insert_chunk(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+        chunk = KbChunk(kb_id=kb_id, text="test text", normalized_text="test normalized", frame=Frame.CAUSAL, domains=["python"])
+        chunk_id = await store.insert_kb_chunk(chunk)
+        assert isinstance(chunk_id, str)
+
+    async def test_insert_chunk_with_embedding(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+        chunk = KbChunk(kb_id=kb_id, text="test", normalized_text="test", frame=Frame.CAUSAL)
+        emb = np.random.randn(384).astype(np.float32)
+        chunk_id = await store.insert_kb_chunk(chunk, embedding=emb)
+        assert isinstance(chunk_id, str)
+
+    async def test_insert_chunk_creates_subjects(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+        chunk = KbChunk(
+            kb_id=kb_id, text="test", normalized_text="test", frame=Frame.CAUSAL,
+            domains=["react"], entities=["React"],
+        )
+        chunk_id = await store.insert_kb_chunk(chunk)
+        import aiosqlite
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT s.name, s.kind FROM subjects s JOIN kb_chunk_subjects kcs ON s.id = kcs.subject_id WHERE kcs.kb_chunk_id = ?",
+                (chunk_id,),
+            )
+            rows = await cursor.fetchall()
+            subjects = [(r["name"], r["kind"]) for r in rows]
+            assert ("react", "domain") in subjects
+            assert ("react", "entity") in subjects
+
+
+class TestKBChunkSearch:
+    async def test_search_within_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+
+        emb_a = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        emb_b = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+
+        chunk_a = KbChunk(kb_id=kb_id, text="a", normalized_text="a", frame=Frame.CAUSAL)
+        chunk_b = KbChunk(kb_id=kb_id, text="b", normalized_text="b", frame=Frame.CAUSAL)
+        await store.insert_kb_chunk(chunk_a, embedding=emb_a)
+        await store.insert_kb_chunk(chunk_b, embedding=emb_b)
+
+        query = np.array([0.9, 0.1, 0.0], dtype=np.float32)
+        results = await store.search_kb_by_embedding(query, kb_id=kb_id, limit=2)
+        assert len(results) == 2
+        assert results[0].insight.text == "a"
+        assert results[0].score > results[1].score
+
+    async def test_search_across_all_kbs(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb1 = await store.create_kb("kb-1")
+        kb2 = await store.create_kb("kb-2")
+        from sem_mem.models import KbChunk
+
+        emb = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        await store.insert_kb_chunk(KbChunk(kb_id=kb1, text="from kb1", normalized_text="from kb1", frame=Frame.CAUSAL), embedding=emb)
+        await store.insert_kb_chunk(KbChunk(kb_id=kb2, text="from kb2", normalized_text="from kb2", frame=Frame.CAUSAL), embedding=emb)
+
+        results = await store.search_kb_by_embedding(emb, limit=10)
+        assert len(results) == 2
+
+    async def test_search_empty_kb(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("empty-kb")
+        query = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        results = await store.search_kb_by_embedding(query, kb_id=kb_id)
+        assert results == []
+
+
+class TestKBChunkList:
+    async def test_list_chunks(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+        for i in range(3):
+            await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text=f"chunk {i}", normalized_text=f"chunk {i}", frame=Frame.CAUSAL))
+        chunks = await store.list_kb_chunks(kb_id)
+        assert len(chunks) == 3
+
+
+class TestKBChunkDelete:
+    async def test_delete_chunks(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("test-kb")
+        from sem_mem.models import KbChunk
+        for i in range(3):
+            await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text=f"chunk {i}", normalized_text=f"chunk {i}", frame=Frame.CAUSAL))
+        deleted = await store.delete_kb_chunks(kb_id)
+        assert deleted == 3
+        chunks = await store.list_kb_chunks(kb_id)
+        assert len(chunks) == 0
+
+    async def test_cascade_delete_removes_chunks(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        kb_id = await store.create_kb("cascade-test")
+        from sem_mem.models import KbChunk
+        await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text="chunk", normalized_text="chunk", frame=Frame.CAUSAL, domains=["test"]))
+        await store.delete_kb(kb_id)
+        chunks = await store.list_kb_chunks(kb_id)
+        assert len(chunks) == 0
