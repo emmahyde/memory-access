@@ -355,12 +355,11 @@ class TestKnowledgeBaseSearch:
             ),
         ]
 
-        embeddings = np.array(
-            [np.random.rand(1536).astype(np.float32) for _ in chunks],
-            dtype=object,
-        )
+        embeddings_list = [
+            np.random.rand(1536).astype(np.float32) for _ in chunks
+        ]
 
-        for chunk, emb in zip(chunks, embeddings):
+        for chunk, emb in zip(chunks, embeddings_list):
             await store.insert_kb_chunk(chunk, emb)
 
         return store, kb_id
