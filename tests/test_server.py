@@ -228,6 +228,148 @@ class TestSearchBySubject:
         assert "No insights found" in result
 
 
+class TestAddKnowledgeBase:
+    @pytest.mark.asyncio
+    async def test_add_kb_crawl(self, tmp_db):
+        """Test creating a KB by crawling."""
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        # Mock the crawl service
+        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+            mock_crawl = AsyncMock()
+            mock_crawl_factory.return_value = mock_crawl
+
+            # Mock crawl to return a page
+            from sem_mem.models import CrawledPage
+            mock_crawl.crawl.return_value = [
+                CrawledPage(
+                    url="https://example.com/page1",
+                    markdown="# Example\n\nThis is test content.",
+                    metadata={},
+                )
+            ]
+
+            # Mock normalizer
+            with patch.object(app.normalizer, "normalize") as mock_normalize:
+                from sem_mem.models import Insight
+                mock_normalize.return_value = [
+                    Insight(
+                        text="This is test content.",
+                        normalized_text="This is test content.",
+                        frame=Frame.CAUSAL,
+                        domains=["test"],
+                        entities=[],
+                        problems=[],
+                        resolutions=[],
+                        contexts=[],
+                        confidence=0.8,
+                    )
+                ]
+
+                result = await app.add_knowledge_base(
+                    name="test-kb",
+                    url="https://example.com",
+                    description="Test KB",
+                    scrape_only=False,
+                    limit=1000,
+                )
+
+                assert "✓ Created KB 'test-kb'" in result
+                assert "chunks" in result
+
+                # Verify KB was created
+                kb = await app.store.get_kb_by_name("test-kb")
+                assert kb is not None
+                assert kb.name == "test-kb"
+                assert kb.description == "Test KB"
+
+    @pytest.mark.asyncio
+    async def test_add_kb_scrape_only(self, tmp_db):
+        """Test creating a KB by scraping a single URL."""
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+            mock_crawl = AsyncMock()
+            mock_crawl_factory.return_value = mock_crawl
+
+            from sem_mem.models import CrawledPage
+            mock_crawl.scrape.return_value = CrawledPage(
+                url="https://example.com",
+                markdown="# Single Page\n\nContent here.",
+                metadata={},
+            )
+
+            with patch.object(app.normalizer, "normalize") as mock_normalize:
+                from sem_mem.models import Insight
+                mock_normalize.return_value = [
+                    Insight(
+                        text="Content here.",
+                        normalized_text="Content here.",
+                        frame=Frame.PATTERN,
+                        domains=["web"],
+                        entities=[],
+                        problems=[],
+                        resolutions=[],
+                        contexts=[],
+                        confidence=0.75,
+                    )
+                ]
+
+                result = await app.add_knowledge_base(
+                    name="single-page-kb",
+                    url="https://example.com",
+                    description="Single page KB",
+                    scrape_only=True,
+                )
+
+                assert "✓ Created KB 'single-page-kb'" in result
+                assert "from https://example.com" in result
+
+    @pytest.mark.asyncio
+    async def test_add_kb_already_exists(self, tmp_db):
+        """Test that creating a KB with duplicate name fails gracefully."""
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        # Create first KB
+        await app.store.create_kb("duplicate-kb", description="First")
+
+        # Try to create with same name
+        result = await app.add_knowledge_base(
+            name="duplicate-kb",
+            url="https://example.com",
+            description="Second",
+        )
+
+        assert "already exists" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_add_kb_ingest_failure_cleanup(self, tmp_db):
+        """Test that KB is cleaned up if ingestion fails."""
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+            mock_crawl = AsyncMock()
+            mock_crawl_factory.return_value = mock_crawl
+            mock_crawl.crawl.side_effect = Exception("Crawl failed")
+
+            result = await app.add_knowledge_base(
+                name="failed-kb",
+                url="https://example.com",
+                description="Will fail",
+            )
+
+            assert "✗ Failed to ingest KB" in result
+            assert "Crawl failed" in result
+
+            # Verify KB was cleaned up
+            kb = await app.store.get_kb_by_name("failed-kb")
+            assert kb is None
+
+
 class TestSearchKnowledgeBase:
     @pytest.mark.asyncio
     async def test_search_kb_returns_results(self, tmp_db):

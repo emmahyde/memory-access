@@ -162,6 +162,56 @@ class SemMemApp:
                 lines.append(f"  Source: {r.insight.source}")
         return "\n".join(lines)
 
+    async def add_knowledge_base(
+        self,
+        name: str,
+        url: str,
+        description: str = "",
+        scrape_only: bool = False,
+        limit: int = 1000,
+    ) -> str:
+        """Create a knowledge base by crawling or scraping a URL.
+
+        Args:
+            name: Unique knowledge base name (slug)
+            url: URL to crawl or scrape
+            description: Optional KB description
+            scrape_only: If True, scrape single URL; if False, crawl entire site up to limit
+            limit: Max pages to crawl (ignored if scrape_only=True)
+        """
+        # Check if KB already exists
+        existing = await self.store.get_kb_by_name(name)
+        if existing:
+            return f"Knowledge base '{name}' already exists."
+
+        # Create the KB
+        kb_id = await self.store.create_kb(name, description, "crawl" if not scrape_only else "scrape")
+
+        # Create ingestor
+        from .crawl import create_crawl_service
+        from .ingest import Ingestor
+
+        crawl_service = create_crawl_service()
+        ingestor = Ingestor(
+            store=self.store,
+            normalizer=self.normalizer,
+            embeddings=self.embeddings,
+            crawl_service=crawl_service,
+        )
+
+        # Ingest the data
+        try:
+            if scrape_only:
+                total_chunks = await ingestor.ingest_scrape(kb_id, url)
+                return f"✓ Created KB '{name}' with {total_chunks} chunks from {url}"
+            else:
+                total_chunks = await ingestor.ingest_crawl(kb_id, url, limit=limit)
+                return f"✓ Created KB '{name}' with {total_chunks} chunks from {url} (crawled up to {limit} pages)"
+        except Exception as e:
+            # Clean up the KB if ingestion fails
+            await self.store.delete_kb(kb_id)
+            return f"✗ Failed to ingest KB '{name}': {str(e)}"
+
     async def list_knowledge_bases(self) -> str:
         """List all knowledge bases."""
         kbs = await self.store.list_kbs()
@@ -292,6 +342,36 @@ def create_mcp_server() -> FastMCP:
             app = await create_app()
         return await app.get_subject_relations(
             name=name, kind=kind, relation_type=relation_type, limit=limit
+        )
+
+    @mcp.tool()
+    async def add_knowledge_base(
+        name: str,
+        url: str,
+        description: str = "",
+        scrape_only: bool = False,
+        limit: int = 1000,
+    ) -> str:
+        """Create a new knowledge base by crawling or scraping a URL.
+
+        Args:
+            name: Unique knowledge base name (e.g., 'rails-docs', 'python-asyncio')
+            url: URL to crawl or scrape
+            description: Optional description of the knowledge base
+            scrape_only: If true, scrape only the single URL; if false, crawl the entire site
+            limit: Maximum number of pages to crawl (default 1000, ignored if scrape_only=true)
+
+        Returns: Status message with number of chunks ingested
+        """
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.add_knowledge_base(
+            name=name,
+            url=url,
+            description=description,
+            scrape_only=scrape_only,
+            limit=limit,
         )
 
     @mcp.tool()
