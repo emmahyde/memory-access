@@ -6,8 +6,8 @@
   },
   "plugins": [
     {
-      "name": "sem-mem",
-      "description": "Teaches Claude how to use the sem-mem MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
+      "name": "memory-access",
+      "description": "Teaches Claude how to use the memory-access MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
       "version": "1.0.0",
       "author": {
         "name": "Emma Hyde"

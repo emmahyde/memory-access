@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock
-from sem_mem.ingest import split_markdown, Ingestor
-from sem_mem.models import CrawledPage, Frame, Insight
+from memory_access.ingest import split_markdown, Ingestor
+from memory_access.models import CrawledPage, Frame, Insight
 
 
 class TestSplitMarkdown:

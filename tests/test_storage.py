@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from sem_mem.storage import InsightStore, _migrate_003_insight_relations
-from sem_mem.models import Frame, Insight
+from memory_access.storage import InsightStore, _migrate_003_insight_relations
+from memory_access.models import Frame, Insight
 
 
 class TestInsightStoreInit:
@@ -839,7 +839,7 @@ class TestKBChunkInsert:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         chunk = KbChunk(kb_id=kb_id, text="test text", normalized_text="test normalized", frame=Frame.CAUSAL, domains=["python"])
         chunk_id = await store.insert_kb_chunk(chunk)
         assert isinstance(chunk_id, str)
@@ -848,7 +848,7 @@ class TestKBChunkInsert:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         chunk = KbChunk(kb_id=kb_id, text="test", normalized_text="test", frame=Frame.CAUSAL)
         emb = np.random.randn(384).astype(np.float32)
         chunk_id = await store.insert_kb_chunk(chunk, embedding=emb)
@@ -858,7 +858,7 @@ class TestKBChunkInsert:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         chunk = KbChunk(
             kb_id=kb_id, text="test", normalized_text="test", frame=Frame.CAUSAL,
             domains=["react"], entities=["React"],
@@ -882,7 +882,7 @@ class TestKBChunkSearch:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
 
         emb_a = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         emb_b = np.array([0.0, 1.0, 0.0], dtype=np.float32)
@@ -903,7 +903,7 @@ class TestKBChunkSearch:
         await store.initialize()
         kb1 = await store.create_kb("kb-1")
         kb2 = await store.create_kb("kb-2")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
 
         emb = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         await store.insert_kb_chunk(KbChunk(kb_id=kb1, text="from kb1", normalized_text="from kb1", frame=Frame.CAUSAL), embedding=emb)
@@ -926,7 +926,7 @@ class TestKBChunkList:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         for i in range(3):
             await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text=f"chunk {i}", normalized_text=f"chunk {i}", frame=Frame.CAUSAL))
         chunks = await store.list_kb_chunks(kb_id)
@@ -938,7 +938,7 @@ class TestKBChunkDelete:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("test-kb")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         for i in range(3):
             await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text=f"chunk {i}", normalized_text=f"chunk {i}", frame=Frame.CAUSAL))
         deleted = await store.delete_kb_chunks(kb_id)
@@ -950,7 +950,7 @@ class TestKBChunkDelete:
         store = InsightStore(tmp_db)
         await store.initialize()
         kb_id = await store.create_kb("cascade-test")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         await store.insert_kb_chunk(KbChunk(kb_id=kb_id, text="chunk", normalized_text="chunk", frame=Frame.CAUSAL, domains=["test"]))
         await store.delete_kb(kb_id)
         chunks = await store.list_kb_chunks(kb_id)

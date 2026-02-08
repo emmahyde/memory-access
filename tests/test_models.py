@@ -1,4 +1,4 @@
-from sem_mem.models import Frame, Insight, SearchResult, KnowledgeBase, KbChunk, CrawledPage
+from memory_access.models import Frame, Insight, SearchResult, KnowledgeBase, KbChunk, CrawledPage
 
 
 class TestFrame:

@@ -132,9 +132,9 @@ If appending to an existing KB, you'll see before/after counts:
 
 For Claude Code:
 - Use `AskUserQuestion` for interactive input (one question per turn)
-- Use `Bash` to execute CLI commands: `uv run sem-mem kb new ...`
+- Use `Bash` to execute CLI commands: `uv run memory-access kb new ...`
 - Capture stderr for progress output
 - Parse the knowledge_bases table to extract final stats
 - Handle errors gracefully with recovery options
 
-The skill leverages the `sem-mem kb` CLI tool family for execution.
+The skill leverages the `memory-access kb` CLI tool family for execution.

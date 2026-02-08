@@ -2,8 +2,8 @@ import json
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock, patch
-from sem_mem.server import create_app
-from sem_mem.models import Frame
+from memory_access.server import create_app
+from memory_access.models import Frame
 
 
 def _mock_anthropic_response(text: str):
@@ -236,12 +236,12 @@ class TestAddKnowledgeBase:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
 
         # Mock the crawl service
-        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+        with patch("memory_access.crawl.create_crawl_service") as mock_crawl_factory:
             mock_crawl = AsyncMock()
             mock_crawl_factory.return_value = mock_crawl
 
             # Mock crawl to return a page
-            from sem_mem.models import CrawledPage
+            from memory_access.models import CrawledPage
             mock_crawl.crawl.return_value = [
                 CrawledPage(
                     url="https://example.com/page1",
@@ -252,7 +252,7 @@ class TestAddKnowledgeBase:
 
             # Mock normalizer
             with patch.object(app.normalizer, "normalize") as mock_normalize:
-                from sem_mem.models import Insight
+                from memory_access.models import Insight
                 mock_normalize.return_value = [
                     Insight(
                         text="This is test content.",
@@ -290,11 +290,11 @@ class TestAddKnowledgeBase:
         mock_client = MagicMock()
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
 
-        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+        with patch("memory_access.crawl.create_crawl_service") as mock_crawl_factory:
             mock_crawl = AsyncMock()
             mock_crawl_factory.return_value = mock_crawl
 
-            from sem_mem.models import CrawledPage
+            from memory_access.models import CrawledPage
             mock_crawl.scrape.return_value = CrawledPage(
                 url="https://example.com",
                 markdown="# Single Page\n\nContent here.",
@@ -302,7 +302,7 @@ class TestAddKnowledgeBase:
             )
 
             with patch.object(app.normalizer, "normalize") as mock_normalize:
-                from sem_mem.models import Insight
+                from memory_access.models import Insight
                 mock_normalize.return_value = [
                     Insight(
                         text="Content here.",
@@ -351,7 +351,7 @@ class TestAddKnowledgeBase:
         mock_client = MagicMock()
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
 
-        with patch("sem_mem.crawl.create_crawl_service") as mock_crawl_factory:
+        with patch("memory_access.crawl.create_crawl_service") as mock_crawl_factory:
             mock_crawl = AsyncMock()
             mock_crawl_factory.return_value = mock_crawl
             mock_crawl.crawl.side_effect = Exception("Crawl failed")
@@ -377,7 +377,7 @@ class TestSearchKnowledgeBase:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         # Create a KB and insert a chunk with embedding
         kb_id = await app.store.create_kb("test-kb", description="Test KB")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         emb = np.array([1.0, 0.0, 0.0] + [0.0] * 125, dtype=np.float32)
         chunk = KbChunk(
             kb_id=kb_id, text="Rails uses MVC", normalized_text="Rails framework uses MVC pattern",
@@ -393,7 +393,7 @@ class TestSearchKnowledgeBase:
         mock_client = MagicMock()
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         kb_id = await app.store.create_kb("rails-docs")
-        from sem_mem.models import KbChunk
+        from memory_access.models import KbChunk
         emb = np.array([1.0, 0.0, 0.0] + [0.0] * 125, dtype=np.float32)
         await app.store.insert_kb_chunk(
             KbChunk(kb_id=kb_id, text="t", normalized_text="Rails content", frame=Frame.CAUSAL),

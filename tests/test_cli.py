@@ -1,18 +1,18 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from sem_mem.cli import _dispatch, _cmd_new, _cmd_list, _cmd_delete, _cmd_refresh
+from memory_access.cli import _dispatch, _cmd_new, _cmd_list, _cmd_delete, _cmd_refresh
 
 
 class TestCmdList:
     async def test_list_empty(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         await _cmd_list(app)
         captured = capsys.readouterr()
         assert "No knowledge bases" in captured.err
 
     async def test_list_with_kbs(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         await app.store.create_kb("rails-docs", description="Rails documentation", source_type="crawl")
         await _cmd_list(app)
@@ -23,7 +23,7 @@ class TestCmdList:
 
 class TestCmdDelete:
     async def test_delete_existing(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         await app.store.create_kb("to-delete")
         args = MagicMock()
@@ -33,7 +33,7 @@ class TestCmdDelete:
         assert "Deleted" in captured.err
 
     async def test_delete_nonexistent(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         args = MagicMock()
         args.name = "nonexistent"
@@ -44,7 +44,7 @@ class TestCmdDelete:
 
 class TestCmdNew:
     async def test_new_without_source(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         ingestor = MagicMock()
         args = MagicMock()
@@ -60,7 +60,7 @@ class TestCmdNew:
         assert "my-kb" in captured.err
 
     async def test_new_with_crawl(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         ingestor = MagicMock()
         ingestor.ingest_crawl = AsyncMock(return_value=42)
@@ -76,7 +76,7 @@ class TestCmdNew:
         ingestor.ingest_crawl.assert_called_once()
 
     async def test_new_with_scrape(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         ingestor = MagicMock()
         ingestor.ingest_scrape = AsyncMock(return_value=5)
@@ -94,7 +94,7 @@ class TestCmdNew:
 
 class TestCmdRefresh:
     async def test_refresh_nonexistent(self, tmp_db, capsys):
-        from sem_mem.server import create_app
+        from memory_access.server import create_app
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         ingestor = MagicMock()
         args = MagicMock()
@@ -104,8 +104,8 @@ class TestCmdRefresh:
         assert "not found" in captured.err
 
     async def test_refresh_clears_chunks(self, tmp_db, capsys):
-        from sem_mem.server import create_app
-        from sem_mem.models import KbChunk, Frame
+        from memory_access.server import create_app
+        from memory_access.models import KbChunk, Frame
         app = await create_app(db_path=tmp_db, anthropic_client=MagicMock(), embeddings=MagicMock())
         kb_id = await app.store.create_kb("test-kb", source_type="crawl")
         await app.store.insert_kb_chunk(KbChunk(kb_id=kb_id, text="old", normalized_text="old", frame=Frame.CAUSAL))

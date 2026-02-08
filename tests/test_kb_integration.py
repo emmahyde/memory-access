@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from sem_mem.crawl import CrawlService
-from sem_mem.embeddings import EmbeddingEngine
-from sem_mem.ingest import Ingestor, split_markdown
-from sem_mem.models import CrawledPage, Frame, Insight, KbChunk
-from sem_mem.normalizer import Normalizer
-from sem_mem.storage import InsightStore
+from memory_access.crawl import CrawlService
+from memory_access.embeddings import EmbeddingEngine
+from memory_access.ingest import Ingestor, split_markdown
+from memory_access.models import CrawledPage, Frame, Insight, KbChunk
+from memory_access.normalizer import Normalizer
+from memory_access.storage import InsightStore
 
 
 # ============================================================================

@@ -22,7 +22,7 @@ uv run pytest tests/test_storage.py
 uv run pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables
 
 # Run MCP server directly
-uv run sem-mem
+uv run memory-access
 ```
 
 ## Architecture
@@ -31,7 +31,7 @@ uv run sem-mem
 
 **Data flow (search):** Query → embed → cosine similarity search in `InsightStore`, or subject-based lookup, or graph traversal via shared-subject relations.
 
-### Source layout (`src/sem_mem/`)
+### Source layout (`src/memory_access/`)
 
 - **`models.py`** — `Frame` enum (CAUSAL, CONSTRAINT, PATTERN, EQUIVALENCE, TAXONOMY, PROCEDURE), `Insight`, `GitContext`, `SearchResult`
 - **`normalizer.py`** — LLM decomposition/classification via Anthropic API (or Bedrock). Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
@@ -41,7 +41,7 @@ uv run sem-mem
 
 ### Database
 
-Default location: `~/.claude/sem-mem/memory.db` (override with `MEMORY_DB_PATH` env var).
+Default location: `~/.claude/memory-access/memory.db` (override with `MEMORY_DB_PATH` env var).
 
 Four tables: `insights`, `subjects` (with `insight_subjects` junction), `insight_relations`, `subject_relations`. Schema versioned via `schema_versions` table.
 
@@ -72,4 +72,4 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 
 ## Plugin
 
-This repo is also a Claude Code plugin (`claude plugin install sem-mem@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-sem-mem` skill and a `PreCompact` hook.
+This repo is also a Claude Code plugin (`claude plugin install memory-access@brainspace`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.

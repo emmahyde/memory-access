@@ -1,12 +1,12 @@
 {
-  "name": "sem-mem",
+  "name": "memory-access",
   "version": "1.0.0",
-  "description": "Teaches Claude how to use the sem-mem MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
+  "description": "Teaches Claude how to use the memory-access MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
   "author": {
     "name": "Emma Hyde"
   },
   "homepage": "https://github.com/emmahyde/brainspace",
   "repository": "https://github.com/emmahyde/brainspace",
   "license": "MIT",
-  "keywords": ["sem-mem", "mcp", "knowledge-graph", "embeddings", "insights"]
+  "keywords": ["memory-access", "mcp", "knowledge-graph", "embeddings", "insights"]
 }

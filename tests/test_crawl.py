@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from sem_mem.crawl import create_crawl_service, FirecrawlService, CrawlService
-from sem_mem.models import CrawledPage
+from memory_access.crawl import create_crawl_service, FirecrawlService, CrawlService
+from memory_access.models import CrawledPage
 
 
 class TestCreateCrawlService:

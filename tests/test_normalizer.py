@@ -1,8 +1,8 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from sem_mem.normalizer import Normalizer
-from sem_mem.models import Frame
+from memory_access.normalizer import Normalizer
+from memory_access.models import Frame
 
 
 def _mock_anthropic_response(text: str):
@@ -139,7 +139,7 @@ class TestNormalizePipeline:
 
 class TestBedrockNormalizer:
     def test_bedrock_provider_creates_bedrock_client(self):
-        with patch("sem_mem.normalizer.anthropic") as mock_anthropic:
+        with patch("memory_access.normalizer.anthropic") as mock_anthropic:
             mock_bedrock_client = MagicMock()
             mock_anthropic.AnthropicBedrock.return_value = mock_bedrock_client
             normalizer = Normalizer(provider="bedrock")
@@ -147,18 +147,18 @@ class TestBedrockNormalizer:
             mock_anthropic.AnthropicBedrock.assert_called_once()
 
     def test_bedrock_default_model(self):
-        with patch("sem_mem.normalizer.anthropic") as mock_anthropic:
+        with patch("memory_access.normalizer.anthropic") as mock_anthropic:
             normalizer = Normalizer(provider="bedrock")
             assert normalizer.model == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     def test_bedrock_custom_model_from_env(self):
-        with patch("sem_mem.normalizer.anthropic") as mock_anthropic:
+        with patch("memory_access.normalizer.anthropic") as mock_anthropic:
             with patch.dict("os.environ", {"BEDROCK_LLM_MODEL": "custom-model"}):
                 normalizer = Normalizer(provider="bedrock")
                 assert normalizer.model == "custom-model"
 
     def test_bedrock_region_from_env(self):
-        with patch("sem_mem.normalizer.anthropic") as mock_anthropic:
+        with patch("memory_access.normalizer.anthropic") as mock_anthropic:
             with patch.dict("os.environ", {"AWS_REGION": "eu-west-1", "AWS_PROFILE": "myprofile"}):
                 normalizer = Normalizer(provider="bedrock")
                 mock_anthropic.AnthropicBedrock.assert_called_once_with(
@@ -181,7 +181,7 @@ class TestBedrockNormalizer:
         assert atoms == ["Bedrock insight"]
 
     def test_default_provider_creates_anthropic_client(self):
-        with patch("sem_mem.normalizer.anthropic") as mock_anthropic:
+        with patch("memory_access.normalizer.anthropic") as mock_anthropic:
             mock_client = MagicMock()
             mock_anthropic.Anthropic.return_value = mock_client
             normalizer = Normalizer()
