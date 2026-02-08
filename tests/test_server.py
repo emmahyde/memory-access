@@ -24,6 +24,7 @@ def _mock_embedding_engine():
         vec[call_count[0] % 128] = 1.0
         return vec
     engine.embed = _embed
+    engine.embed_batch = lambda texts: np.array([_embed(t) for t in texts], dtype=np.float32)
     return engine
 
 
@@ -225,3 +226,72 @@ class TestSearchBySubject:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.search_by_subject(name="nonexistent")
         assert "No insights found" in result
+
+
+class TestSearchKnowledgeBase:
+    @pytest.mark.asyncio
+    async def test_search_kb_returns_results(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        # Create a KB and insert a chunk with embedding
+        kb_id = await app.store.create_kb("test-kb", description="Test KB")
+        from sem_mem.models import KbChunk
+        emb = np.array([1.0, 0.0, 0.0] + [0.0] * 125, dtype=np.float32)
+        chunk = KbChunk(
+            kb_id=kb_id, text="Rails uses MVC", normalized_text="Rails framework uses MVC pattern",
+            frame=Frame.PATTERN, domains=["rails"],
+        )
+        await app.store.insert_kb_chunk(chunk, embedding=emb)
+
+        result = await app.search_knowledge_base(query="How does Rails work?", limit=5)
+        assert "Rails framework uses MVC pattern" in result
+
+    @pytest.mark.asyncio
+    async def test_search_kb_by_name(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        kb_id = await app.store.create_kb("rails-docs")
+        from sem_mem.models import KbChunk
+        emb = np.array([1.0, 0.0, 0.0] + [0.0] * 125, dtype=np.float32)
+        await app.store.insert_kb_chunk(
+            KbChunk(kb_id=kb_id, text="t", normalized_text="Rails content", frame=Frame.CAUSAL),
+            embedding=emb,
+        )
+
+        result = await app.search_knowledge_base(query="rails", kb_name="rails-docs")
+        assert "Rails content" in result
+
+    @pytest.mark.asyncio
+    async def test_search_kb_not_found(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        result = await app.search_knowledge_base(query="anything", kb_name="nonexistent")
+        assert "not found" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_search_kb_empty(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        result = await app.search_knowledge_base(query="anything")
+        assert "No matching content" in result
+
+
+class TestListKnowledgeBases:
+    @pytest.mark.asyncio
+    async def test_list_kbs_returns_formatted(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        await app.store.create_kb("rails-docs", description="Rails documentation", source_type="crawl")
+        await app.store.create_kb("python-docs", description="Python docs", source_type="scrape")
+
+        result = await app.list_knowledge_bases()
+        assert "rails-docs" in result
+        assert "python-docs" in result
+        assert "Rails documentation" in result
+
+    @pytest.mark.asyncio
+    async def test_list_kbs_empty(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+        result = await app.list_knowledge_bases()
+        assert "No knowledge bases" in result

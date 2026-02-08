@@ -31,9 +31,12 @@ class SemMemApp:
     ) -> str:
         domains = [d.strip() for d in domain.split(",") if d.strip()] if domain else []
         insights = await self.normalizer.normalize(text, source=source, domains=domains)
+        if not insights:
+            return "No insights extracted from text."
+        texts_to_embed = [i.normalized_text for i in insights]
+        embeddings = self.embeddings.embed_batch(texts_to_embed)
         ids = []
-        for insight in insights:
-            emb = self.embeddings.embed(insight.normalized_text)
+        for insight, emb in zip(insights, embeddings):
             insight_id = await self.store.insert(
                 insight, emb, repo=repo, pr=pr, author=author, project=project, task=task
             )
@@ -137,6 +140,37 @@ class SemMemApp:
                 f"({rel['from_name']}:{rel['from_kind']}) --[{rel['relation_type']}]--> ({rel['to_name']}:{rel['to_kind']})"
             )
         return f"Found {len(results)} relation(s):\n" + "\n".join(lines)
+
+    async def search_knowledge_base(self, query: str, kb_name: str = "", limit: int = 5) -> str:
+        """Search KB chunks by semantic similarity."""
+        query_emb = self.embeddings.embed(query)
+        kb_id = None
+        if kb_name:
+            kb = await self.store.get_kb_by_name(kb_name)
+            if kb is None:
+                return f"Knowledge base '{kb_name}' not found."
+            kb_id = kb.id
+        results = await self.store.search_kb_by_embedding(query_emb, kb_id=kb_id, limit=limit)
+        if not results:
+            return "No matching content found in knowledge bases."
+        lines = []
+        for r in results:
+            lines.append(f"[{r.score:.3f}] ({r.insight.frame.value}) {r.insight.normalized_text}")
+            if r.insight.text != r.insight.normalized_text:
+                lines.append(f"  Original: {r.insight.text}")
+            if r.insight.source:
+                lines.append(f"  Source: {r.insight.source}")
+        return "\n".join(lines)
+
+    async def list_knowledge_bases(self) -> str:
+        """List all knowledge bases."""
+        kbs = await self.store.list_kbs()
+        if not kbs:
+            return "No knowledge bases found."
+        lines = []
+        for kb in kbs:
+            lines.append(f"- {kb.name}: {kb.description or '(no description)'} [{kb.source_type or 'unknown'}]")
+        return "\n".join(lines)
 
 
 async def create_app(
@@ -259,6 +293,24 @@ def create_mcp_server() -> FastMCP:
         return await app.get_subject_relations(
             name=name, kind=kind, relation_type=relation_type, limit=limit
         )
+
+    @mcp.tool()
+    async def search_knowledge_base(query: str, kb_name: str = "", limit: int = 5) -> str:
+        """Search for relevant content in knowledge bases by semantic similarity.
+        Searches within a specific knowledge base if kb_name is provided,
+        or across all knowledge bases if omitted."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.search_knowledge_base(query=query, kb_name=kb_name, limit=limit)
+
+    @mcp.tool()
+    async def list_knowledge_bases() -> str:
+        """List all available knowledge bases with their descriptions and chunk counts."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.list_knowledge_bases()
 
     return mcp
 
