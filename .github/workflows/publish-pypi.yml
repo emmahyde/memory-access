@@ -45,21 +45,3 @@ jobs:
 
       - name: Publish to PyPI
         run: twine upload dist/* -u __token__ -p ${{ secrets.PYPI_API_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          body: |
-            Released on PyPI: https://pypi.org/project/memory-access/${{ steps.version.outputs.version }}/
-
-            Install with:
-            ```bash
-            pip install memory-access==${{ steps.version.outputs.version }}
-            ```
-            or
-            ```bash
-            uv add memory-access==${{ steps.version.outputs.version }}
-            ```
-          files: dist/*
-          draft: false
-          prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
