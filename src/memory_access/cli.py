@@ -6,7 +6,7 @@ import sys
 
 
 def main():
-    """Entry point for sem-mem CLI."""
+    """Entry point for memory-access CLI."""
     if len(sys.argv) > 1 and sys.argv[1] == "kb":
         return _run_kb_cli()
 
@@ -16,7 +16,7 @@ def main():
 
 
 def _run_kb_cli():
-    parser = argparse.ArgumentParser(prog="sem-mem kb")
+    parser = argparse.ArgumentParser(prog="memory-access kb")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # new
@@ -128,4 +128,4 @@ async def _cmd_refresh(app, ingestor, args):
     # Re-ingest — we need the original URL, but it's not stored on the KB model.
     # For now, require --crawl or --scrape on refresh too, or look for source_url from old chunks.
     # Since we don't store the source URL on the KB, print a message.
-    print(f"Chunks cleared. Use 'sem-mem kb new' with --crawl/--scrape to re-ingest.", file=sys.stderr)
+    print(f"Chunks cleared. Use 'memory-access kb new' with --crawl/--scrape to re-ingest.", file=sys.stderr)

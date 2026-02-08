@@ -233,7 +233,7 @@ async def create_app(
 ) -> SemMemApp:
     db_path = db_path or os.environ.get(
         "MEMORY_DB_PATH",
-        os.path.expanduser("~/.claude/sem-mem/memory.db"),
+        os.path.expanduser("~/.claude/memory-access/memory.db"),
     )
     store = InsightStore(db_path)
     await store.initialize()
@@ -246,7 +246,7 @@ async def create_app(
 
 
 def create_mcp_server() -> FastMCP:
-    mcp = FastMCP("sem-mem")
+    mcp = FastMCP("memory-access")
     app: SemMemApp | None = None
 
     @mcp.tool()

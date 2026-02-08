@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup script for the sem-mem MCP server.
+# One-time setup script for the memory-access MCP server.
 # Usage: bash scripts/setup.sh
 # Safe to run multiple times (idempotent).
 set -euo pipefail
@@ -23,17 +23,17 @@ else
   info "uv installed ($(uv --version))"
 fi
 
-# 2. Install the sem-mem package
-if uv tool list 2>/dev/null | grep -q '^sem-mem '; then
-  info "sem-mem is already installed"
+# 2. Install the memory-access package
+if uv tool list 2>/dev/null | grep -q '^memory-access '; then
+  info "memory-access is already installed"
 else
-  echo "Installing sem-mem..."
-  uv tool install sem-mem
-  info "sem-mem installed"
+  echo "Installing memory-access..."
+  uv tool install memory-access
+  info "memory-access installed"
 fi
 
 # 3. Create default DB directory
-DB_DIR="$HOME/.claude/sem-mem"
+DB_DIR="$HOME/.claude/memory-access"
 mkdir -p "$DB_DIR"
 info "Database directory ready: $DB_DIR"
 
@@ -59,14 +59,14 @@ fi
 # 5. Summary
 echo ""
 echo "========================================="
-echo " sem-mem setup complete"
+echo " memory-access setup complete"
 echo "========================================="
 echo ""
 echo "Run the MCP server:"
-echo "  uv tool run sem-mem"
+echo "  uv tool run memory-access"
 echo ""
 echo "Or install as a Claude Code plugin:"
-echo "  claude plugin install sem-mem@brainspace"
+echo "  claude plugin install memory-access@emmahyde"
 echo ""
 echo "Default database location:"
 echo "  $DB_DIR/memory.db"
