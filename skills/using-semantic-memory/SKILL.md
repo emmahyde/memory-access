@@ -1,5 +1,5 @@
 ---
-name: using-sem-mem
+name: using-semantic-memory
 description: This skill should be used when the user asks to "store a memory", "remember this", "save this insight", "search memories", "find related insights", "what do I know about", "connect these concepts", "add a relationship", "traverse the knowledge graph", or when working with the sem-mem MCP tools. Also activates when storing learnings, debugging knowledge, or building on prior insights.
 ---
 
