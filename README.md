@@ -46,11 +46,20 @@ export AWS_REGION=us-east-1
 claude plugin install sem-mem@brainspace
 ```
 
-### 4. Verify
+### 4. Set up knowledge base support (optional)
+
+To ingest external documentation as knowledge bases:
 
 ```bash
-uv run pytest          # 85 tests pass
-uv run sem-mem # server starts
+export FIRECRAWL_API_KEY=...  # Get from https://www.firecrawl.dev/
+```
+
+### 5. Verify
+
+```bash
+uv run pytest          # 174 tests pass
+uv run sem-mem         # server starts (MCP server mode)
+uv run sem-mem kb list # knowledge base CLI mode
 ```
 
 ## Configuration
@@ -68,6 +77,9 @@ uv run sem-mem # server starts
 | `AWS_REGION` | No | AWS region for Bedrock. Default: `us-east-1` |
 | `BEDROCK_EMBEDDING_MODEL` | No | Bedrock model ID. Default: `amazon.titan-embed-text-v2:0` |
 | `BEDROCK_LLM_MODEL` | No | Bedrock Claude model ID. Default: `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| `FIRECRAWL_API_KEY` | No | Web crawling for knowledge bases. Get from https://www.firecrawl.dev/ |
+| `CRAWL_SERVICE` | No | Crawl provider. Default: `firecrawl` |
+| `MIN_CONFIDENCE_THRESHOLD` | No | Minimum confidence to store ingested chunks. Default: `0.5` |
 
 \* Not required when using `bedrock` provider.
 
@@ -134,6 +146,11 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 - **`add_subject_relation`** — Create a typed edge between two subjects (e.g., `problem --solved_by--> resolution`).
 - **`get_subject_relations`** — Query outgoing relations from a subject.
 
+### Knowledge Bases
+
+- **`search_knowledge_base`** — Search external documentation by semantic similarity. Optionally filter by KB name.
+- **`list_knowledge_bases`** — List all knowledge bases with descriptions and chunk counts.
+
 ## Semantic Frames
 
 Insights are normalized into one of six canonical frames:
@@ -155,6 +172,58 @@ Insights are automatically indexed by extracted subjects:
 |---|---|
 | `domain`, `entity`, `problem`, `resolution`, `context` | Extracted from text by the normalizer |
 | `repo`, `pr`, `person`, `project`, `task` | From git context parameters on `store_insight` |
+
+## Knowledge Bases
+
+Ingest external documentation (APIs, guides, frameworks) into independently queryable knowledge bases.
+
+### CLI Commands
+
+```bash
+# Create a new knowledge base by crawling a URL
+sem-mem kb new rails-docs --crawl https://guides.rubyonrails.org/association_basics.html --description "Rails API Reference"
+
+# Create from a single page
+sem-mem kb new python-async --scrape https://docs.python.org/3/library/asyncio.html
+
+# List all knowledge bases
+sem-mem kb list
+
+# Delete a knowledge base
+sem-mem kb delete rails-docs
+
+# Re-crawl and refresh a knowledge base
+sem-mem kb refresh rails-docs --limit 100
+```
+
+### MCP Integration
+
+Query knowledge bases from Claude:
+
+```
+// In Claude Code:
+search_knowledge_base("Rails has_many association", kb_name="rails-docs")
+// Returns ranked chunks from the Rails docs
+```
+
+### Architecture
+
+The KB pipeline mirrors the insight storage system:
+
+```
+External docs (web)
+  |
+  v
+Crawl → Split → Normalize → Embed → Store
+```
+
+- **Crawl**: Firecrawl extracts markdown from web pages
+- **Split**: Heading-based chunking with paragraph and size fallbacks
+- **Normalize**: Same LLM decomposition as insights (Claude Haiku)
+- **Embed**: Same embedding engine as insights (OpenAI or Bedrock)
+- **Store**: SQLite tables (`kb_chunks`) with semantic frames and subjects
+
+KB chunks share the `subjects` index with insights, enabling cross-referencing chat memory with external docs.
 
 ## How It Works
 
@@ -182,7 +251,7 @@ InsightStore (SQLite)
 ## Development
 
 ```bash
-# Run all tests (85 tests)
+# Run all tests (174 tests: 162 unit tests + 12 integration tests)
 uv run pytest
 
 # Run a specific test file
@@ -191,21 +260,36 @@ uv run pytest tests/test_storage.py
 # Run a specific test
 uv run pytest tests/test_storage.py::TestInsightStoreInit::test_initialize_creates_tables -v
 
+# Run integration tests only
+uv run pytest tests/test_kb_integration.py -v
+
 # Generate dummy data for testing
 uv run python scripts/generate_dummy_data.py
 ```
 
 ## Database Schema
 
-The database has four main tables plus a migration tracker:
+The database has tables for insights, knowledge bases, and knowledge graphs:
 
-- **`insights`** — Core storage: text, normalized_text, frame, subject lists (JSON arrays), embedding (float32 blob), confidence, timestamps
+### Core Tables
+
+- **`insights`** — Chat memory: text, normalized_text, frame, subject lists (JSON arrays), embedding (float32 blob), confidence, timestamps
 - **`subjects`** + **`insight_subjects`** — Subject index linking insights to named/typed subjects
 - **`insight_relations`** — Weighted edges between insights (shared_subject)
 - **`subject_relations`** — Typed edges between subjects (contains, scopes, solved_by, etc.)
+
+### Knowledge Base Tables
+
+- **`knowledge_bases`** — Registry: name, description, source_type, created_at, updated_at
+- **`kb_chunks`** — Crawled and normalized chunks: text, frame, subjects, embedding, source_url, confidence
+- **`kb_chunk_subjects`** — Subject index for KB chunks (same subjects as insights)
+- **`kb_insight_relations`** — Optional links between KB chunks and chat insights (for cross-referencing)
+
+### Metadata
+
 - **`schema_versions`** — Migration tracking
 
-Migrations run automatically on startup. Currently at version 4.
+Migrations run automatically on startup. Currently at version 5.
 
 ## Claude Code Plugin
 
