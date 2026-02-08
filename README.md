@@ -126,7 +126,7 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 }
 ```
 
-## MCP Tools
+## MCP Tools (12 tools)
 
 ### Storage
 
@@ -148,6 +148,7 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 
 ### Knowledge Bases
 
+- **`add_knowledge_base`** — Create a new knowledge base by crawling or scraping a URL. Supports both full site crawling and single-page scraping with automatic ingestion and semantic indexing.
 - **`search_knowledge_base`** — Search external documentation by semantic similarity. Optionally filter by KB name.
 - **`list_knowledge_bases`** — List all knowledge bases with descriptions and chunk counts.
 
@@ -175,9 +176,34 @@ Insights are automatically indexed by extracted subjects:
 
 ## Knowledge Bases
 
-Ingest external documentation (APIs, guides, frameworks) into independently queryable knowledge bases.
+Ingest external documentation (APIs, guides, frameworks) into independently queryable knowledge bases. Create and query KBs via **CLI or MCP** — use whichever fits your workflow.
+
+### MCP Tools
+
+From Claude Code, use MCP tools for full KB lifecycle:
+
+```javascript
+// Create a new KB by crawling
+add_knowledge_base("rails-docs", "https://guides.rubyonrails.org/association_basics.html",
+                   "Rails Association Guide")
+
+// Create a KB from a single page
+add_knowledge_base("python-async", "https://docs.python.org/3/library/asyncio.html",
+                   "Python asyncio docs", scrape_only=true)
+
+// Search across all KBs
+search_knowledge_base("has_many association in Rails")
+
+// Search within a specific KB
+search_knowledge_base("asyncio event loop", kb_name="python-async")
+
+// List all KBs
+list_knowledge_bases()
+```
 
 ### CLI Commands
+
+From the command line, use subcommands for KB management:
 
 ```bash
 # Create a new knowledge base by crawling a URL
@@ -194,16 +220,6 @@ sem-mem kb delete rails-docs
 
 # Re-crawl and refresh a knowledge base
 sem-mem kb refresh rails-docs --limit 100
-```
-
-### MCP Integration
-
-Query knowledge bases from Claude:
-
-```
-// In Claude Code:
-search_knowledge_base("Rails has_many association", kb_name="rails-docs")
-// Returns ranked chunks from the Rails docs
 ```
 
 ### Architecture
