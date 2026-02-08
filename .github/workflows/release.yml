@@ -9,10 +9,6 @@ permissions:
 
 jobs:
   release:
-    concurrency:
-      group: release-and-publish
-      cancel-in-progress: false
-
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip release]')"
 
@@ -106,7 +102,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Created tag: $TAG"
 
-      - name: Push commit and tag, then create release (atomic sequence)
+      - name: Push commit and tag, then create release
         run: |
           # Push commit to main
           git push
@@ -114,8 +110,11 @@ jobs:
           # Push tag to GitHub (this triggers publish-pypi.yml)
           git push origin "${{ steps.create_tag.outputs.tag }}"
 
-          # Create GitHub Release immediately after tag push
-          # This minimizes the race condition window
+          # Small delay to ensure tag is propagated and indexed
+          sleep 2
+
+          # Create GitHub Release
+          # publish-pypi.yml runs in parallel and publishes to PyPI
           gh release create "${{ steps.create_tag.outputs.tag }}" \
             --title "Release ${{ steps.create_tag.outputs.tag }}" \
             --generate-notes
