@@ -225,7 +225,7 @@ class SemMemApp:
 
 async def create_app(
     db_path: str | None = None,
-    embedding_model: str = "text-embedding-3-small",
+    embedding_model: str | None = None,
     anthropic_client: anthropic.Anthropic | None = None,
     embedding_provider: str | None = None,
     llm_provider: str | None = None,
@@ -240,7 +240,10 @@ async def create_app(
     embedding_provider = embedding_provider or os.environ.get("EMBEDDING_PROVIDER", "openai")
     llm_provider = llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")
     if embeddings is None:
-        embeddings = create_embedding_engine(provider=embedding_provider, model=embedding_model)
+        kwargs = {}
+        if embedding_model is not None:
+            kwargs["model"] = embedding_model
+        embeddings = create_embedding_engine(provider=embedding_provider, **kwargs)
     normalizer = Normalizer(client=anthropic_client, provider=llm_provider)
     return SemMemApp(store=store, embeddings=embeddings, normalizer=normalizer)
 
