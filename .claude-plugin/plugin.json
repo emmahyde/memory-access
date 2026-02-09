@@ -8,5 +8,16 @@
   "homepage": "https://github.com/emmahyde/memory-access",
   "repository": "https://github.com/emmahyde/memory-access",
   "license": "Apache-2.0",
-  "keywords": ["memory-access", "mcp", "knowledge-graph", "embeddings", "insights"]
+  "keywords": ["memory-access", "mcp", "knowledge-graph", "embeddings", "insights"],
+  "mcpServers": {
+    "memory-access": {
+      "command": "uvx",
+      "args": ["memory-access"],
+      "env": {
+        "MEMORY_DB_PATH": "~/.claude/memory-access/memory.db",
+        "EMBEDDING_PROVIDER": "bedrock",
+        "LLM_PROVIDER": "bedrock"
+      }
+    }
+  }
 }
