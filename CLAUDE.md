@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A semantic memory MCP server that stores intent-based knowledge for AI agents. Text is decomposed into atomic insights, classified into semantic frames, embedded as vectors, and stored in SQLite with a subject-indexed knowledge graph.
+**memory-access** — a semantic memory MCP server that stores intent-based knowledge for AI agents. Text is decomposed into atomic insights, classified into semantic frames, embedded as vectors, and stored in SQLite with a subject-indexed knowledge graph.
+
+> **Naming:** The canonical name is `memory-access`. All old references to `sem-mem`, `semantic-memory`, `SemMem`, or `brainspace` are deprecated and should be updated to `memory-access` / `MemoryAccessApp`.
 
 ## Commands
 
@@ -37,7 +39,7 @@ uv run memory-access
 - **`normalizer.py`** — LLM decomposition/classification via Anthropic API (or Bedrock). Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
 - **`embeddings.py`** — Embedding generation (OpenAI or Bedrock Titan), L2-normalized float32 vectors. `create_embedding_engine()` factory selects provider.
 - **`storage.py`** — `InsightStore` class: SQLite persistence, migration system, subject indexing, knowledge graph queries
-- **`server.py`** — `SemMemApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
+- **`server.py`** — `MemoryAccessApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
 
 ### Database
 
@@ -70,6 +72,10 @@ Migrations are Python functions in `storage.py` (named `_migrate_NNN_*`), tracke
 - `BEDROCK_EMBEDDING_MODEL` — Bedrock embedding model ID (default: `amazon.titan-embed-text-v2:0`)
 - `BEDROCK_LLM_MODEL` — Bedrock Claude model ID (default: `us.anthropic.claude-haiku-4-5-20251001-v1:0`)
 
+## Publishing
+
+The git workflow automatically publishes to PyPI. To release a new version, just push a commit to the `main` branch of the memory-access repo. The GitHub Actions release workflow bumps versions in both `pyproject.toml` and `.claude-plugin/plugin.json` and publishes.
+
 ## Plugin
 
-This repo is also a Claude Code plugin (`claude plugin install memory-access@emmahyde`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill and a `PreCompact` hook.
+This repo is also a Claude Code plugin (`claude plugin install memory-access@emmahyde`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill, a `PreCompact` hook for insight preservation, and a `UserPromptSubmit` hook for post-compaction insight storage.

@@ -438,13 +438,13 @@ git commit -m "feat: add Ingestor with crawl → split → normalize → embed �
 
 ---
 
-### Task 5: SemMemApp KB Methods + MCP Tools
+### Task 5: MemoryAccessApp KB Methods + MCP Tools
 
 **Files:**
 - Modify: `src/memory_access/server.py`
 - Modify: `tests/test_server.py`
 
-**Step 1: Add KB methods to `SemMemApp`**
+**Step 1: Add KB methods to `MemoryAccessApp`**
 
 Add to the class:
 - `search_knowledge_base(query, kb_name="", limit=5) -> str` — embed query, search kb_chunks (optionally filtered by KB name via `get_kb_by_name`), format results
@@ -452,7 +452,7 @@ Add to the class:
 
 **Step 2: Update `create_app` to accept crawl service config**
 
-Add `crawl_service` parameter to `create_app()`. Store on `SemMemApp` for use by CLI (not by MCP tools directly — ingestion happens via CLI, not MCP).
+Add `crawl_service` parameter to `create_app()`. Store on `MemoryAccessApp` for use by CLI (not by MCP tools directly — ingestion happens via CLI, not MCP).
 
 **Step 3: Add MCP tools to `create_mcp_server`**
 
@@ -472,7 +472,7 @@ async def list_knowledge_bases() -> str:
 
 **Step 4: Add tests to `tests/test_server.py`**
 
-Test the new `SemMemApp` methods with mocked store/embeddings. Verify `search_knowledge_base` formats results correctly. Verify `list_knowledge_bases` returns formatted list.
+Test the new `MemoryAccessApp` methods with mocked store/embeddings. Verify `search_knowledge_base` formats results correctly. Verify `list_knowledge_bases` returns formatted list.
 
 **Step 5: Commit**
 

@@ -4,7 +4,7 @@ description: Interactive wizard to install and configure the memory-access MCP s
 allowed-tools: ["Bash", "Read", "Edit", "Write", "AskUserQuestion"]
 ---
 
-# Setup Sem-Mem
+# Setup Memory-Access
 
 Walk the user through installing and configuring the memory-access semantic memory system. Execute each step sequentially, reporting progress as you go.
 

@@ -740,7 +740,7 @@ wheels = [
 
 [[package]]
 name = "memory-access"
-version = "0.1.2"
+version = "0.1.14"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

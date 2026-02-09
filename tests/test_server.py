@@ -42,7 +42,9 @@ class TestStoreInsight:
         ]
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.store_insight(text="Test insight", domain="testing", source="unit_test")
-        assert "Stored 1 insight" in result
+        result_data = json.loads(result)
+        assert result_data["stored"] == 1
+        assert len(result_data["ids"]) == 1
 
     @pytest.mark.asyncio
     async def test_store_compound_creates_multiple(self, tmp_db):
@@ -62,7 +64,9 @@ class TestStoreInsight:
         ]
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.store_insight(text="Insight A and Insight B", domain="", source="")
-        assert "Stored 2 insight" in result
+        result_data = json.loads(result)
+        assert result_data["stored"] == 2
+        assert len(result_data["ids"]) == 2
 
 
 class TestSearchInsights:
@@ -88,9 +92,10 @@ class TestSearchInsights:
         await app.store_insight(text="Baking requires preheated oven", domain="cooking")
 
         results = await app.search_insights(query="why does my React component re-render?", limit=2)
-        assert "State change causes React re-render" in results
-        lines = results.strip().split("\n")
-        assert "causal" in lines[0].lower()
+        results_data = json.loads(results)
+        assert len(results_data) > 0
+        assert results_data[0]["frame"] == "causal"
+        assert "State change causes React re-render" in results_data[0]["text"]
 
     @pytest.mark.asyncio
     async def test_search_empty_returns_message(self, tmp_db):
@@ -114,7 +119,8 @@ class TestUpdateInsight:
         ]
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         store_result = await app.store_insight(text="Initial insight")
-        insight_id = store_result.split(": ")[1].strip()
+        result_data = json.loads(store_result)
+        insight_id = result_data["ids"][0]
 
         result = await app.update_insight(insight_id=insight_id, confidence=0.5)
         assert "Updated" in result
@@ -141,7 +147,8 @@ class TestForget:
         ]
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         store_result = await app.store_insight(text="Forget me")
-        insight_id = store_result.split(": ")[1].strip()
+        result_data = json.loads(store_result)
+        insight_id = result_data["ids"][0]
 
         result = await app.forget(insight_id=insight_id)
         assert "Deleted" in result or "Forgot" in result
@@ -173,8 +180,10 @@ class TestListInsights:
         await app.store_insight(text="Python insight", domain="python")
 
         result = await app.list_insights(domain="react")
-        assert "React thing" in result
-        assert "Python thing" not in result
+        result_data = json.loads(result)
+        texts = [item["text"] for item in result_data]
+        assert "React thing" in texts
+        assert "Python thing" not in texts
 
     @pytest.mark.asyncio
     async def test_list_by_frame(self, tmp_db):
@@ -194,8 +203,10 @@ class TestListInsights:
         await app.store_insight(text="Constraint insight")
 
         result = await app.list_insights(frame="causal")
-        assert "A causes B" in result
-        assert "C requires D" not in result
+        result_data = json.loads(result)
+        texts = [item["text"] for item in result_data]
+        assert "A causes B" in texts
+        assert "C requires D" not in texts
 
 
 class TestSearchBySubject:
@@ -217,8 +228,10 @@ class TestSearchBySubject:
         await app.store_insight(text="Python insight", domain="python")
 
         result = await app.search_by_subject(name="devops")
-        assert "Docker pattern" in result
-        assert "Python" not in result
+        result_data = json.loads(result)
+        texts = [item["text"] for item in result_data]
+        assert "Docker pattern" in texts
+        assert not any("Python" in text for text in texts)
 
     @pytest.mark.asyncio
     async def test_search_by_subject_empty(self, tmp_db):
@@ -386,7 +399,9 @@ class TestSearchKnowledgeBase:
         await app.store.insert_kb_chunk(chunk, embedding=emb)
 
         result = await app.search_knowledge_base(query="How does Rails work?", limit=5)
-        assert "Rails framework uses MVC pattern" in result
+        result_data = json.loads(result)
+        texts = [item["text"] for item in result_data]
+        assert "Rails framework uses MVC pattern" in texts
 
     @pytest.mark.asyncio
     async def test_search_kb_by_name(self, tmp_db):
@@ -401,7 +416,9 @@ class TestSearchKnowledgeBase:
         )
 
         result = await app.search_knowledge_base(query="rails", kb_name="rails-docs")
-        assert "Rails content" in result
+        result_data = json.loads(result)
+        texts = [item["text"] for item in result_data]
+        assert "Rails content" in texts
 
     @pytest.mark.asyncio
     async def test_search_kb_not_found(self, tmp_db):
@@ -427,9 +444,12 @@ class TestListKnowledgeBases:
         await app.store.create_kb("python-docs", description="Python docs", source_type="scrape")
 
         result = await app.list_knowledge_bases()
-        assert "rails-docs" in result
-        assert "python-docs" in result
-        assert "Rails documentation" in result
+        result_data = json.loads(result)
+        names = [item["name"] for item in result_data]
+        descriptions = [item.get("description") for item in result_data]
+        assert "rails-docs" in names
+        assert "python-docs" in names
+        assert "Rails documentation" in descriptions
 
     @pytest.mark.asyncio
     async def test_list_kbs_empty(self, tmp_db):

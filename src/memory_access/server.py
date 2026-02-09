@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 import anthropic
@@ -10,7 +11,7 @@ from .normalizer import Normalizer
 from .storage import InsightStore
 
 
-class SemMemApp:
+class MemoryAccessApp:
     """Application wrapper holding shared state for MCP tool handlers."""
 
     def __init__(self, store: InsightStore, embeddings: EmbeddingEngine | BedrockEmbeddingEngine, normalizer: Normalizer):
@@ -41,7 +42,7 @@ class SemMemApp:
                 insight, emb, repo=repo, pr=pr, author=author, project=project, task=task
             )
             ids.append(insight_id)
-        return f"Stored {len(ids)} insight(s): {', '.join(ids)}"
+        return json.dumps({"stored": len(ids), "ids": ids}, indent=2)
 
     async def search_insights(self, query: str, domain: str = "", limit: int = 5) -> str:
         query_emb = self.embeddings.embed(query)
@@ -50,14 +51,17 @@ class SemMemApp:
         )
         if not results:
             return "No matching insights found."
-        lines = []
+        output = []
         for r in results:
-            lines.append(f"[{r.score:.3f}] ({r.insight.frame.value}) {r.insight.normalized_text}")
-            if r.insight.text != r.insight.normalized_text:
-                lines.append(f"  Original: {r.insight.text}")
-            if r.insight.domains:
-                lines.append(f"  Domains: {', '.join(r.insight.domains)}")
-        return "\n".join(lines)
+            output.append({
+                "score": round(r.score, 3),
+                "id": (r.insight.id or "unknown")[:8],
+                "frame": r.insight.frame.value,
+                "text": r.insight.normalized_text,
+                "original_text": r.insight.text if r.insight.text != r.insight.normalized_text else None,
+                "domains": r.insight.domains if r.insight.domains else None,
+            })
+        return json.dumps(output, indent=2)
 
     async def update_insight(self, insight_id: str, confidence: float | None = None) -> str:
         kwargs = {}
@@ -80,13 +84,15 @@ class SemMemApp:
         )
         if not results:
             return "No insights stored."
-        lines = []
+        output = []
         for i in results:
-            short_id = (i.id or "unknown")[:8]
-            lines.append(f"[{short_id}] ({i.frame.value}) {i.normalized_text}")
-            if i.domains:
-                lines.append(f"  Domains: {', '.join(i.domains)}")
-        return "\n".join(lines)
+            output.append({
+                "id": (i.id or "unknown")[:8],
+                "frame": i.frame.value,
+                "text": i.normalized_text,
+                "domains": i.domains if i.domains else None,
+            })
+        return json.dumps(output, indent=2)
 
     async def search_by_subject(self, name: str, kind: str = "", limit: int = 20) -> str:
         results = await self.store.search_by_subject(
@@ -94,20 +100,28 @@ class SemMemApp:
         )
         if not results:
             return "No insights found for that subject."
-        lines = []
+        output = []
         for i in results:
-            short_id = (i.id or "unknown")[:8]
-            lines.append(f"[{short_id}] ({i.frame.value}) {i.normalized_text}")
-            if i.domains:
-                lines.append(f"  Domains: {', '.join(i.domains)}")
-        return "\n".join(lines)
+            output.append({
+                "id": (i.id or "unknown")[:8],
+                "frame": i.frame.value,
+                "text": i.normalized_text,
+                "domains": i.domains if i.domains else None,
+            })
+        return json.dumps(output, indent=2)
 
     async def related_insights(self, insight_id: str, limit: int = 10) -> str:
         results = await self.store.related_insights(insight_id, limit=limit)
         if not results:
             return "No related insights found."
-        lines = [f"- [{r.insight.id}] (score={r.score:.3f}) {r.insight.normalized_text}" for r in results]
-        return f"Found {len(results)} related insight(s):\n" + "\n".join(lines)
+        output = []
+        for r in results:
+            output.append({
+                "score": round(r.score, 2),
+                "id": r.insight.id or "unknown",
+                "text": r.insight.normalized_text,
+            })
+        return json.dumps(output, indent=2)
 
     async def add_subject_relation(
         self, from_name: str, from_kind: str, to_name: str, to_kind: str, relation_type: str
@@ -134,12 +148,16 @@ class SemMemApp:
         )
         if not results:
             return "No relations found for that subject."
-        lines = []
+        output = []
         for rel in results:
-            lines.append(
-                f"({rel['from_name']}:{rel['from_kind']}) --[{rel['relation_type']}]--> ({rel['to_name']}:{rel['to_kind']})"
-            )
-        return f"Found {len(results)} relation(s):\n" + "\n".join(lines)
+            output.append({
+                "from_name": rel['from_name'],
+                "from_kind": rel['from_kind'],
+                "relation_type": rel['relation_type'],
+                "to_name": rel['to_name'],
+                "to_kind": rel['to_kind'],
+            })
+        return json.dumps(output, indent=2)
 
     async def search_knowledge_base(self, query: str, kb_name: str = "", limit: int = 5) -> str:
         """Search KB chunks by semantic similarity."""
@@ -153,14 +171,16 @@ class SemMemApp:
         results = await self.store.search_kb_by_embedding(query_emb, kb_id=kb_id, limit=limit)
         if not results:
             return "No matching content found in knowledge bases."
-        lines = []
+        output = []
         for r in results:
-            lines.append(f"[{r.score:.3f}] ({r.insight.frame.value}) {r.insight.normalized_text}")
-            if r.insight.text != r.insight.normalized_text:
-                lines.append(f"  Original: {r.insight.text}")
-            if r.insight.source:
-                lines.append(f"  Source: {r.insight.source}")
-        return "\n".join(lines)
+            output.append({
+                "score": round(r.score, 3),
+                "frame": r.insight.frame.value,
+                "text": r.insight.normalized_text,
+                "original_text": r.insight.text if r.insight.text != r.insight.normalized_text else None,
+                "source": r.insight.source if r.insight.source else None,
+            })
+        return json.dumps(output, indent=2)
 
     async def add_knowledge_base(
         self,
@@ -217,10 +237,14 @@ class SemMemApp:
         kbs = await self.store.list_kbs()
         if not kbs:
             return "No knowledge bases found."
-        lines = []
+        output = []
         for kb in kbs:
-            lines.append(f"- {kb.name}: {kb.description or '(no description)'} [{kb.source_type or 'unknown'}]")
-        return "\n".join(lines)
+            output.append({
+                "name": kb.name,
+                "description": kb.description or None,
+                "source_type": kb.source_type or None,
+            })
+        return json.dumps(output, indent=2)
 
 
 async def create_app(
@@ -230,7 +254,7 @@ async def create_app(
     embedding_provider: str | None = None,
     llm_provider: str | None = None,
     embeddings: EmbeddingEngine | BedrockEmbeddingEngine | None = None,
-) -> SemMemApp:
+) -> MemoryAccessApp:
     db_path = db_path or os.environ.get(
         "MEMORY_DB_PATH",
         os.path.expanduser("~/.claude/memory-access/memory.db"),
@@ -245,12 +269,12 @@ async def create_app(
             kwargs["model"] = embedding_model
         embeddings = create_embedding_engine(provider=embedding_provider, **kwargs)
     normalizer = Normalizer(client=anthropic_client, provider=llm_provider)
-    return SemMemApp(store=store, embeddings=embeddings, normalizer=normalizer)
+    return MemoryAccessApp(store=store, embeddings=embeddings, normalizer=normalizer)
 
 
 def create_mcp_server() -> FastMCP:
     mcp = FastMCP("memory-access")
-    app: SemMemApp | None = None
+    app: MemoryAccessApp | None = None
 
     @mcp.tool()
     async def store_insight(

@@ -3,9 +3,9 @@ name: using-semantic-memory
 description: This skill should be used when the user asks to "store a memory", "remember this", "save this insight", "search memories", "find related insights", "what do I know about", "connect these concepts", "add a relationship", "traverse the knowledge graph", or when working with the memory-access MCP tools. Also activates when storing learnings, debugging knowledge, or building on prior insights.
 ---
 
-# Using Sem-Mem
+# Using Memory-Access
 
-Sem-Mem is a persistent knowledge graph MCP server that stores insights as normalized semantic frames with embeddings and typed subject relations. Use it to build durable knowledge that survives context compaction and spans sessions.
+Memory-Access is a persistent knowledge graph MCP server that stores insights as normalized semantic frames with embeddings and typed subject relations. Use it to build durable knowledge that survives context compaction and spans sessions.
 
 ## When to Use
 
