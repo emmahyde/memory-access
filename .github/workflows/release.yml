@@ -102,21 +102,25 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Created tag: $TAG"
 
-      - name: Push commit and tag, then create release
+      - name: Push commit and tag
         run: |
           # Push commit to main
           git push
 
-          # Push tag to GitHub (this triggers publish-pypi.yml)
+          # Push tag to GitHub
           git push origin "${{ steps.create_tag.outputs.tag }}"
 
-          # Small delay to ensure tag is propagated and indexed
-          sleep 2
-
-          # Create GitHub Release
-          # publish-pypi.yml runs in parallel and publishes to PyPI
+      - name: Create GitHub Release
+        run: |
           gh release create "${{ steps.create_tag.outputs.tag }}" \
             --title "Release ${{ steps.create_tag.outputs.tag }}" \
             --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger PyPI publish workflow
+        run: |
+          gh workflow run publish-pypi.yml \
+            --ref "${{ steps.create_tag.outputs.tag }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
