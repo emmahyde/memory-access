@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish to PyPI
+    name: Publish
     runs-on: ubuntu-latest
 
     steps:
@@ -43,5 +43,5 @@ jobs:
       - name: Build package
         run: python -m build
 
-      - name: Publish to PyPI
+      - name: Publish
         run: twine upload dist/* -u __token__ -p ${{ secrets.PYPI_API_TOKEN }}
