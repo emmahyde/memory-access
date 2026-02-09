@@ -66,6 +66,9 @@ jobs:
           # Update pyproject.toml in place
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
 
+          # Update plugin.json version to match
+          sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" .claude-plugin/plugin.json
+
           # Verify the update
           VERIFY_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           if [ "$VERIFY_VERSION" != "$NEW_VERSION" ]; then
@@ -82,7 +85,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add pyproject.toml
+          git add pyproject.toml .claude-plugin/plugin.json
           git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip release]"
 
           # Get the commit SHA for tagging
