@@ -104,9 +104,8 @@ jobs:
 
       - name: Push commit and tag
         run: |
-          # Configure git to use the PAT for authentication
-          git config --global credential.helper store
-          echo "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com" > ~/.git-credentials
+          # Update remote URL to use PAT for authentication
+          git remote set-url origin "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git"
 
           # Push commit to main
           git push
