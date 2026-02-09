@@ -119,8 +119,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger PyPI publish workflow
-        run: |
-          gh workflow run publish-pypi.yml \
-            --ref "${{ steps.create_tag.outputs.tag }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'publish-pypi.yml',
+              ref: '${{ steps.create_tag.outputs.tag }}'
+            })
