@@ -10,7 +10,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip release]')"
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add pyproject.toml
-          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip ci]"
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }} [skip release]"
 
           # Get the commit SHA for tagging
           COMMIT_SHA=$(git rev-parse HEAD)
