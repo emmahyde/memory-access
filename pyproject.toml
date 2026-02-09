@@ -1,6 +1,6 @@
 [project]
 name = "memory-access"
-version = "0.1.14"
+version = "0.1.15"
 description = "An MCP server that gives AI agents persistent, intent-based memory with vector embeddings and semantic indexing."
 readme = "README.md"
 license = {text = "Apache-2.0"}
