@@ -8,11 +8,37 @@ import anthropic
 from mcp.server.fastmcp import FastMCP
 
 from .embeddings import EmbeddingEngine, BedrockEmbeddingEngine, create_embedding_engine
+from .models import TaskState
 from .normalizer import Normalizer
 from .storage import InsightStore
 
 if TYPE_CHECKING:
     from .task_store import TaskStore
+
+
+def _task_to_dict(task) -> dict:
+    return {
+        "task_id": task.task_id,
+        "title": task.title,
+        "status": task.status.value,
+        "owner": task.owner,
+        "retry_count": task.retry_count,
+        "version": task.version,
+        "created_at": task.created_at.isoformat(),
+        "updated_at": task.updated_at.isoformat(),
+    }
+
+
+def _task_event_to_dict(event) -> dict:
+    return {
+        "id": event.id,
+        "task_id": event.task_id,
+        "event_type": event.event_type,
+        "actor": event.actor,
+        "payload": event.payload,
+        "created_at": event.created_at.isoformat(),
+    }
+
 
 class MemoryAccessApp:
     """Application wrapper holding shared state for MCP tool handlers."""
@@ -28,6 +54,11 @@ class MemoryAccessApp:
         self.embeddings = embeddings
         self.normalizer = normalizer
         self.task_store = task_store
+
+    def _require_task_store(self):
+        if self.task_store is None:
+            raise RuntimeError("Task store is unavailable. Install optional dependencies and restart.")
+        return self.task_store
 
     async def store_insight(
         self,
@@ -256,6 +287,79 @@ class MemoryAccessApp:
             })
         return json.dumps(output, indent=2)
 
+    async def create_task(self, title: str, owner: str = "", task_id: str = "") -> str:
+        task_store = self._require_task_store()
+        task = await task_store.create_task(title=title, owner=owner, task_id=task_id or None)
+        return json.dumps(_task_to_dict(task), indent=2)
+
+    async def assign_task_locks(self, task_id: str, resources: list[str]) -> str:
+        task_store = self._require_task_store()
+        lock_ids = await task_store.assign_locks(task_id, resources)
+        return json.dumps({"task_id": task_id, "lock_ids": lock_ids, "count": len(lock_ids)}, indent=2)
+
+    async def release_task_locks(self, task_id: str, resources: list[str] | None = None) -> str:
+        task_store = self._require_task_store()
+        released = await task_store.release_locks(task_id, resources)
+        return json.dumps({"task_id": task_id, "released": released}, indent=2)
+
+    async def add_task_dependencies(self, task_id: str, depends_on_task_ids: list[str]) -> str:
+        task_store = self._require_task_store()
+        await task_store.add_dependencies(task_id, depends_on_task_ids)
+        return json.dumps(
+            {"task_id": task_id, "depends_on_task_ids": depends_on_task_ids, "count": len(depends_on_task_ids)},
+            indent=2,
+        )
+
+    async def transition_task(
+        self,
+        task_id: str,
+        from_state: str,
+        to_state: str,
+        actor: str,
+        expected_version: int,
+        reason: str = "",
+        evidence: str = "",
+    ) -> str:
+        task_store = self._require_task_store()
+        from_value = TaskState(from_state)
+        to_value = TaskState(to_state)
+        result = await task_store.transition(
+            task_id=task_id,
+            from_state=from_value,
+            to_state=to_value,
+            actor=actor,
+            expected_version=expected_version,
+            reason=reason,
+            evidence=evidence,
+        )
+        return json.dumps({"task": _task_to_dict(result.task), "event_id": result.event_id}, indent=2)
+
+    async def append_task_event(
+        self, task_id: str, event_type: str, actor: str, payload_json: str = "{}"
+    ) -> str:
+        task_store = self._require_task_store()
+        payload = json.loads(payload_json) if payload_json else {}
+        event = await task_store.append_event(task_id, event_type, actor, payload)
+        return json.dumps(_task_event_to_dict(event), indent=2)
+
+    async def get_task(self, task_id: str) -> str:
+        task_store = self._require_task_store()
+        task = await task_store.get_task(task_id)
+        if task is None:
+            return "Task not found."
+        return json.dumps(_task_to_dict(task), indent=2)
+
+    async def list_tasks(self, status: str = "", limit: int = 100) -> str:
+        task_store = self._require_task_store()
+        parsed_status = TaskState(status) if status else None
+        tasks = await task_store.list_tasks(status=parsed_status, limit=limit)
+        return json.dumps([_task_to_dict(task) for task in tasks], indent=2)
+
+    async def list_task_events(self, task_id: str, limit: int = 100) -> str:
+        task_store = self._require_task_store()
+        events = await task_store.list_events(task_id=task_id, limit=limit)
+        return json.dumps([_task_event_to_dict(event) for event in events], indent=2)
+
 
 async def create_app(
     db_path: str | None = None,
@@ -436,6 +540,94 @@ def create_mcp_server() -> FastMCP:
         if app is None:
             app = await create_app()
         return await app.list_knowledge_bases()
+
+    @mcp.tool()
+    async def create_task(title: str, owner: str = "", task_id: str = "") -> str:
+        """Create a task in the orchestrator state machine."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.create_task(title=title, owner=owner, task_id=task_id)
+
+    @mcp.tool()
+    async def assign_task_locks(task_id: str, resources: list[str]) -> str:
+        """Assign active resource locks to a task. Rejects exact and path-prefix overlaps."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.assign_task_locks(task_id=task_id, resources=resources)
+
+    @mcp.tool()
+    async def release_task_locks(task_id: str, resources: list[str] | None = None) -> str:
+        """Release active locks for a task. If resources is omitted, releases all active locks for the task."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.release_task_locks(task_id=task_id, resources=resources)
+
+    @mcp.tool()
+    async def add_task_dependencies(task_id: str, depends_on_task_ids: list[str]) -> str:
+        """Add task dependency edges. Target task cannot enter in_progress until dependencies are done."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.add_task_dependencies(task_id=task_id, depends_on_task_ids=depends_on_task_ids)
+
+    @mcp.tool()
+    async def transition_task(
+        task_id: str,
+        from_state: str,
+        to_state: str,
+        actor: str,
+        expected_version: int,
+        reason: str = "",
+        evidence: str = "",
+    ) -> str:
+        """Atomically transition a task with optimistic concurrency and DB-enforced state rules."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.transition_task(
+            task_id=task_id,
+            from_state=from_state,
+            to_state=to_state,
+            actor=actor,
+            expected_version=expected_version,
+            reason=reason,
+            evidence=evidence,
+        )
+
+    @mcp.tool()
+    async def append_task_event(task_id: str, event_type: str, actor: str, payload_json: str = "{}") -> str:
+        """Append an audit event for a task. Events are append-only at DB level."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.append_task_event(task_id=task_id, event_type=event_type, actor=actor, payload_json=payload_json)
+
+    @mcp.tool()
+    async def get_task(task_id: str) -> str:
+        """Get one task by id."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.get_task(task_id=task_id)
+
+    @mcp.tool()
+    async def list_tasks(status: str = "", limit: int = 100) -> str:
+        """List tasks, optionally filtered by status."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.list_tasks(status=status, limit=limit)
+
+    @mcp.tool()
+    async def list_task_events(task_id: str, limit: int = 100) -> str:
+        """List append-only audit events for a task."""
+        nonlocal app
+        if app is None:
+            app = await create_app()
+        return await app.list_task_events(task_id=task_id, limit=limit)
 
     return mcp
 

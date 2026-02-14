@@ -331,6 +331,51 @@ async def _migrate_006_task_state_machine(db: aiosqlite.Connection) -> str:
     return "Add tasks, locks, dependencies, events tables with state-machine and append-only triggers"
 
 
+async def _migrate_007_task_lock_path_overlap(db: aiosqlite.Connection) -> str:
+    """Enforce prefix-aware lock conflicts for active resources."""
+    await db.executescript("""
+        CREATE TRIGGER IF NOT EXISTS trg_task_locks_no_path_overlap_insert
+        BEFORE INSERT ON task_locks
+        FOR EACH ROW
+        WHEN NEW.active = 1
+             AND EXISTS (
+                SELECT 1
+                FROM task_locks tl
+                WHERE tl.active = 1
+                  AND (
+                    tl.resource = NEW.resource OR
+                    tl.resource LIKE NEW.resource || '/%' OR
+                    NEW.resource LIKE tl.resource || '/%'
+                  )
+             )
+        BEGIN
+            SELECT RAISE(ABORT, 'task lock path overlap');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_locks_no_path_overlap_activate
+        BEFORE UPDATE OF active ON task_locks
+        FOR EACH ROW
+        WHEN NEW.active = 1
+             AND OLD.active != 1
+             AND EXISTS (
+                SELECT 1
+                FROM task_locks tl
+                WHERE tl.id != NEW.id
+                  AND tl.active = 1
+                  AND (
+                    tl.resource = NEW.resource OR
+                    tl.resource LIKE NEW.resource || '/%' OR
+                    NEW.resource LIKE tl.resource || '/%'
+                  )
+             )
+        BEGIN
+            SELECT RAISE(ABORT, 'task lock path overlap');
+        END;
+    """)
+    await db.commit()
+    return "Add prefix-aware lock conflict triggers on task_locks"
+
+
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
@@ -341,6 +386,7 @@ class InsightStore:
             (4, _migrate_004_subject_relations),
             (5, _migrate_005_knowledge_bases),
             (6, _migrate_006_task_state_machine),
+            (7, _migrate_007_task_lock_path_overlap),
         ]  # list[tuple[int, Callable]]
 
     async def initialize(self):

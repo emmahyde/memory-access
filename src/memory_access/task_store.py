@@ -4,6 +4,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
+from pathlib import PurePosixPath
 from typing import Any
 
 import sqlite3
@@ -69,24 +70,40 @@ class TaskStore:
         lock_ids: list[str] = []
         with database.connection_context():
             for resource in resources:
-                if not resource:
+                normalized = _normalize_resource(resource)
+                if not normalized:
                     continue
                 lock_id = str(uuid.uuid4())
                 try:
                     TaskLockModel.create(
                         id=lock_id,
                         task_id=task_id,
-                        resource=resource,
+                        resource=normalized,
                         active=True,
                         created_at=now,
                     )
-                except IntegrityError as exc:
+                except (sqlite3.IntegrityError, sqlite3.OperationalError, IntegrityError) as exc:
                     raise LockConflict(str(exc)) from exc
                 lock_ids.append(lock_id)
         return lock_ids
 
     async def assign_locks(self, task_id: str, resources: list[str]) -> list[str]:
         return await self._run(self._assign_locks_sync, task_id, resources)
+
+    def _release_locks_sync(self, task_id: str, resources: list[str] | None = None) -> int:
+        with database.connection_context():
+            query = TaskLockModel.update(active=False).where(
+                (TaskLockModel.task_id == task_id) & (TaskLockModel.active == True)  # noqa: E712
+            )
+            if resources:
+                normalized = [_normalize_resource(resource) for resource in resources]
+                normalized = [resource for resource in normalized if resource]
+                if normalized:
+                    query = query.where(TaskLockModel.resource.in_(normalized))
+            return query.execute()
+
+    async def release_locks(self, task_id: str, resources: list[str] | None = None) -> int:
+        return await self._run(self._release_locks_sync, task_id, resources)
 
     def _add_dependencies_sync(self, task_id: str, depends_on_task_ids: list[str]) -> None:
         with database.connection_context():
@@ -119,6 +136,19 @@ class TaskStore:
         self, task_id: str, event_type: str, actor: str, payload: dict[str, Any] | None = None
     ) -> TaskEventRecord:
         return await self._run(self._append_event_sync, task_id, event_type, actor, payload)
+
+    def _list_events_sync(self, task_id: str, limit: int = 100) -> list[TaskEventRecord]:
+        with database.connection_context():
+            query = (
+                TaskEventModel.select()
+                .where(TaskEventModel.task_id == task_id)
+                .order_by(TaskEventModel.created_at.desc())
+                .limit(limit)
+            )
+            return [_event_model_to_record(event) for event in query]
+
+    async def list_events(self, task_id: str, limit: int = 100) -> list[TaskEventRecord]:
+        return await self._run(self._list_events_sync, task_id, limit)
 
     def _transition_sync(
         self,
@@ -264,3 +294,14 @@ def _event_model_to_record(event: TaskEventModel) -> TaskEventRecord:
         payload=payload,
         created_at=event.created_at,
     )
+
+
+def _normalize_resource(resource: str) -> str:
+    value = resource.strip().replace("\\", "/")
+    if not value:
+        return ""
+    # Normalize path segments while preserving relative-style resources.
+    normalized = str(PurePosixPath(value))
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
