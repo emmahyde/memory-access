@@ -457,3 +457,74 @@ class TestListKnowledgeBases:
         app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
         result = await app.list_knowledge_bases()
         assert "No knowledge bases" in result
+
+
+class TestTaskStateMachineTools:
+    @pytest.mark.asyncio
+    async def test_create_and_get_task(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        created = json.loads(await app.create_task(title="index docs", owner="agent-1"))
+        assert created["title"] == "index docs"
+        assert created["owner"] == "agent-1"
+        assert created["status"] == "todo"
+
+        fetched = json.loads(await app.get_task(created["task_id"]))
+        assert fetched["task_id"] == created["task_id"]
+        assert fetched["version"] == 0
+
+    @pytest.mark.asyncio
+    async def test_assign_and_release_task_locks(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        task_a = json.loads(await app.create_task(title="task-a"))
+        task_b = json.loads(await app.create_task(title="task-b"))
+
+        assigned = json.loads(await app.assign_task_locks(task_a["task_id"], ["src/a.py"]))
+        assert assigned["count"] == 1
+
+        released = json.loads(await app.release_task_locks(task_a["task_id"]))
+        assert released["released"] == 1
+
+        assigned_b = json.loads(await app.assign_task_locks(task_b["task_id"], ["src/a.py"]))
+        assert assigned_b["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_transition_task(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        created = json.loads(await app.create_task(title="transition"))
+        transitioned = json.loads(
+            await app.transition_task(
+                task_id=created["task_id"],
+                from_state="todo",
+                to_state="in_progress",
+                actor="orchestrator",
+                expected_version=0,
+            )
+        )
+        assert transitioned["task"]["status"] == "in_progress"
+        assert transitioned["task"]["version"] == 1
+
+    @pytest.mark.asyncio
+    async def test_append_and_list_task_events(self, tmp_db):
+        mock_client = MagicMock()
+        app = await create_app(db_path=tmp_db, anthropic_client=mock_client, embeddings=_mock_embedding_engine())
+
+        created = json.loads(await app.create_task(title="events"))
+        event = json.loads(
+            await app.append_task_event(
+                task_id=created["task_id"],
+                event_type="worklog",
+                actor="agent-1",
+                payload_json=json.dumps({"action": "start"}),
+            )
+        )
+        assert event["event_type"] == "worklog"
+
+        events = json.loads(await app.list_task_events(task_id=created["task_id"], limit=10))
+        assert len(events) >= 1
+        assert events[0]["task_id"] == created["task_id"]

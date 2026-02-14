@@ -41,6 +41,34 @@ class TestTaskStore:
         with pytest.raises(LockConflict):
             await task_store.assign_locks(t2.task_id, ["src/a.py"])
 
+    async def test_lock_prefix_conflict_enforced_by_db(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        task_store = TaskStore(tmp_db)
+
+        t1 = await task_store.create_task("task 1")
+        t2 = await task_store.create_task("task 2")
+
+        await task_store.assign_locks(t1.task_id, ["src"])
+
+        with pytest.raises(LockConflict):
+            await task_store.assign_locks(t2.task_id, ["src/a.py"])
+
+    async def test_release_locks_allows_reacquire(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        task_store = TaskStore(tmp_db)
+
+        t1 = await task_store.create_task("task 1")
+        t2 = await task_store.create_task("task 2")
+
+        await task_store.assign_locks(t1.task_id, ["src/a.py"])
+        released = await task_store.release_locks(t1.task_id)
+        assert released == 1
+
+        lock_ids = await task_store.assign_locks(t2.task_id, ["src/a.py"])
+        assert len(lock_ids) == 1
+
     async def test_invalid_transition_rejected(self, tmp_db):
         store = InsightStore(tmp_db)
         await store.initialize()
@@ -146,6 +174,18 @@ class TestTaskStore:
                 await db.execute("UPDATE task_events SET event_type = 'changed' WHERE id = ?", (event.id,))
                 await db.commit()
 
+    async def test_list_events_returns_latest_first(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        task_store = TaskStore(tmp_db)
+
+        task = await task_store.create_task("events")
+        await task_store.append_event(task.task_id, "first", "operator", {"i": 1})
+        await task_store.append_event(task.task_id, "second", "operator", {"i": 2})
+
+        events = await task_store.list_events(task.task_id, limit=2)
+        assert [event.event_type for event in events] == ["second", "first"]
+
     async def test_migration_created_task_tables(self, tmp_db):
         store = InsightStore(tmp_db)
         await store.initialize()
@@ -159,3 +199,6 @@ class TestTaskStore:
                 "SELECT name FROM sqlite_master WHERE type='index' AND name='ux_task_locks_active_resource'"
             )
             assert await cursor.fetchone() is not None
+            cursor = await db.execute("SELECT MAX(version) FROM schema_versions")
+            row = await cursor.fetchone()
+            assert row is not None and row[0] >= 7
