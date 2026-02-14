@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import TYPE_CHECKING
 
 import anthropic
 from mcp.server.fastmcp import FastMCP
@@ -10,14 +11,23 @@ from .embeddings import EmbeddingEngine, BedrockEmbeddingEngine, create_embeddin
 from .normalizer import Normalizer
 from .storage import InsightStore
 
+if TYPE_CHECKING:
+    from .task_store import TaskStore
 
 class MemoryAccessApp:
     """Application wrapper holding shared state for MCP tool handlers."""
 
-    def __init__(self, store: InsightStore, embeddings: EmbeddingEngine | BedrockEmbeddingEngine, normalizer: Normalizer):
+    def __init__(
+        self,
+        store: InsightStore,
+        embeddings: EmbeddingEngine | BedrockEmbeddingEngine,
+        normalizer: Normalizer,
+        task_store: "TaskStore | None" = None,
+    ):
         self.store = store
         self.embeddings = embeddings
         self.normalizer = normalizer
+        self.task_store = task_store
 
     async def store_insight(
         self,
@@ -261,6 +271,14 @@ async def create_app(
     )
     store = InsightStore(db_path)
     await store.initialize()
+    task_store = None
+    try:
+        from .task_store import TaskStore
+
+        task_store = TaskStore(db_path)
+    except ModuleNotFoundError:
+        # Keep core memory features available if task-state extras are not installed.
+        task_store = None
     embedding_provider = embedding_provider or os.environ.get("EMBEDDING_PROVIDER", "openai")
     llm_provider = llm_provider or os.environ.get("LLM_PROVIDER", "anthropic")
     if embeddings is None:
@@ -269,7 +287,7 @@ async def create_app(
             kwargs["model"] = embedding_model
         embeddings = create_embedding_engine(provider=embedding_provider, **kwargs)
     normalizer = Normalizer(client=anthropic_client, provider=llm_provider)
-    return MemoryAccessApp(store=store, embeddings=embeddings, normalizer=normalizer)
+    return MemoryAccessApp(store=store, embeddings=embeddings, normalizer=normalizer, task_store=task_store)
 
 
 def create_mcp_server() -> FastMCP:

@@ -233,14 +233,122 @@ async def _migrate_005_knowledge_bases(db: aiosqlite.Connection) -> str:
     return "Add knowledge_bases, kb_chunks, kb_chunk_subjects, kb_insight_relations tables"
 
 
+async def _migrate_006_task_state_machine(db: aiosqlite.Connection) -> str:
+    """Create task orchestration tables with DB-enforced transition and lock rules."""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            task_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('todo', 'in_progress', 'blocked', 'done', 'failed', 'canceled')),
+            owner TEXT NOT NULL DEFAULT '',
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            version INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+
+        CREATE TABLE IF NOT EXISTS task_locks (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+            resource TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+            created_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_task_locks_active_resource
+            ON task_locks(resource) WHERE active = 1;
+        CREATE INDEX IF NOT EXISTS idx_task_locks_task_id ON task_locks(task_id);
+
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+            depends_on_task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+            PRIMARY KEY (task_id, depends_on_task_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_task_id);
+
+        CREATE TABLE IF NOT EXISTS task_events (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+            event_type TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            payload TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_events_task_id_created_at ON task_events(task_id, created_at);
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_status_transition_guard
+        BEFORE UPDATE OF status ON tasks
+        FOR EACH ROW
+        WHEN NOT (
+            (OLD.status = NEW.status) OR
+            (OLD.status = 'todo' AND NEW.status IN ('in_progress', 'blocked', 'failed', 'canceled')) OR
+            (OLD.status = 'in_progress' AND NEW.status IN ('done', 'blocked', 'failed', 'canceled')) OR
+            (OLD.status = 'blocked' AND NEW.status IN ('in_progress', 'failed', 'canceled')) OR
+            (OLD.status IN ('done', 'failed', 'canceled') AND NEW.status = OLD.status)
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid task state transition');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_dependencies_before_in_progress
+        BEFORE UPDATE OF status ON tasks
+        FOR EACH ROW
+        WHEN NEW.status = 'in_progress'
+             AND OLD.status != 'in_progress'
+             AND EXISTS (
+                SELECT 1
+                FROM task_dependencies td
+                JOIN tasks dep ON dep.task_id = td.depends_on_task_id
+                WHERE td.task_id = NEW.task_id
+                  AND dep.status != 'done'
+             )
+        BEGIN
+            SELECT RAISE(ABORT, 'task dependencies not complete');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_events_append_only_update
+        BEFORE UPDATE ON task_events
+        FOR EACH ROW
+        BEGIN
+            SELECT RAISE(ABORT, 'task_events is append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_events_append_only_delete
+        BEFORE DELETE ON task_events
+        FOR EACH ROW
+        BEGIN
+            SELECT RAISE(ABORT, 'task_events is append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_locks_immutable_resource
+        BEFORE UPDATE OF resource, task_id ON task_locks
+        FOR EACH ROW
+        BEGIN
+            SELECT RAISE(ABORT, 'task lock resource/task_id is immutable');
+        END;
+    """)
+    await db.commit()
+    return "Add tasks, locks, dependencies, events tables with state-machine and append-only triggers"
+
+
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self._migrations: list = [(1, _migrate_001_subject_index), (2, _migrate_002_add_extraction_columns), (3, _migrate_003_insight_relations), (4, _migrate_004_subject_relations), (5, _migrate_005_knowledge_bases)]  # list[tuple[int, Callable]]
+        self._migrations: list = [
+            (1, _migrate_001_subject_index),
+            (2, _migrate_002_add_extraction_columns),
+            (3, _migrate_003_insight_relations),
+            (4, _migrate_004_subject_relations),
+            (5, _migrate_005_knowledge_bases),
+            (6, _migrate_006_task_state_machine),
+        ]  # list[tuple[int, Callable]]
 
     async def initialize(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA foreign_keys = ON")
+            await db.execute("PRAGMA journal_mode = WAL")
+            await db.execute("PRAGMA busy_timeout = 5000")
             await db.executescript(SCHEMA)
             await db.executescript(SCHEMA_VERSIONS)
             await db.commit()
@@ -248,7 +356,7 @@ class InsightStore:
             # Run pending migrations
             cursor = await db.execute("SELECT MAX(version) FROM schema_versions")
             row = await cursor.fetchone()
-            current_version = row[0] if row[0] is not None else 0
+            current_version = row[0] if row is not None and row[0] is not None else 0
 
             for version, migrate_fn in sorted(self._migrations):
                 if version > current_version:

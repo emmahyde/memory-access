@@ -1,6 +1,6 @@
 from enum import Enum
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,17 @@ class Frame(str, Enum):
     EQUIVALENCE = "equivalence"
     TAXONOMY = "taxonomy"
     PROCEDURE = "procedure"
+
+
+class TaskState(str, Enum):
+    """Task lifecycle states for orchestrated multi-agent execution."""
+
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    BLOCKED = "blocked"
+    DONE = "done"
+    FAILED = "failed"
+    CANCELED = "canceled"
 
 
 class Insight(BaseModel):
@@ -84,3 +95,63 @@ class CrawledPage(BaseModel):
     url: str
     markdown: str
     metadata: dict = Field(default_factory=dict)
+
+
+class TaskRecord(BaseModel):
+    """Persistent task row."""
+
+    task_id: str
+    title: str
+    status: TaskState
+    owner: str = ""
+    retry_count: int = 0
+    version: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskLockRecord(BaseModel):
+    """Active or historical lock held by a task."""
+
+    id: str
+    task_id: str
+    resource: str
+    active: bool
+    created_at: datetime
+
+
+class TaskDependencyRecord(BaseModel):
+    """Dependency edge from a task to another task."""
+
+    task_id: str
+    depends_on_task_id: str
+
+
+class TaskEventRecord(BaseModel):
+    """Append-only task audit log entry."""
+
+    id: str
+    task_id: str
+    event_type: str
+    actor: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class TransitionRequest(BaseModel):
+    """Transition request with optimistic concurrency guard."""
+
+    task_id: str
+    from_state: TaskState
+    to_state: TaskState
+    actor: str
+    reason: str = ""
+    evidence: str = ""
+    expected_version: int
+
+
+class TransitionResult(BaseModel):
+    """Result for a state transition attempt."""
+
+    task: TaskRecord
+    event_id: str
