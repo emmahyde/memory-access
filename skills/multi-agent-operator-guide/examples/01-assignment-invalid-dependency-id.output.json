@@ -1,0 +1,1 @@
+{"allow":false,"code":"SCHEMA_INVALID","reason":"task.dependencies entries must match task_id format","details":{"index":0,"dependency":"dependency-one"}}

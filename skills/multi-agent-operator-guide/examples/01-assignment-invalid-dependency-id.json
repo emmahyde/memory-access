@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "3f56dc4d-35cf-4f97-925c-0b04a6fe8bf4",
+  "packet_type": "assignment",
+  "global_objective": "Implement endpoint tests",
+  "task": {
+    "task_id": "T-12",
+    "title": "Add endpoint tests",
+    "type": "parallelizable",
+    "dependencies": ["dependency-one"],
+    "lock_scope": ["tests/test_api.py"],
+    "forbidden_scope": [],
+    "acceptance_criteria": ["All endpoint tests pass"],
+    "worklog_path": "worklogs/T-12.jsonl",
+    "timeout_seconds": 1200,
+    "heartbeat_interval_seconds": 120,
+    "priority": "normal"
+  },
+  "active_locks": [],
+  "context_package": [],
+  "required_output_schema": "subagent_result_v1"
+}

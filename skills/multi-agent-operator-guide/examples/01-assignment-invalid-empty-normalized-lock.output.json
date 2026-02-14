@@ -1,0 +1,1 @@
+{"allow":false,"code":"SCHEMA_INVALID","reason":"task.lock_scope contains empty resource after normalization","details":{"index":0,"resource":"  "}}

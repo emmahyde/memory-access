@@ -1,0 +1,6 @@
+{
+  "locks": [
+    {"task_id": "T-12", "resource": "src", "active": true},
+    {"task_id": "T-13", "resource": "src/api/handler.py", "active": true}
+  ]
+}

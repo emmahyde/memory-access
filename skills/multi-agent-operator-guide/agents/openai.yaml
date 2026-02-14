@@ -1,0 +1,6 @@
+display_name: Multi-Agent Operator Guide
+short_description: Enforce orchestrator/subagent contracts with validators, lock rules, and fresh-context handoff.
+default_prompt: |
+  Use this skill to run strict multi-agent orchestration with contract validation.
+  Follow contracts.md as source of truth, validate assignment/result packets,
+  enforce lock overlap rules, and reconcile the ledger before completion.

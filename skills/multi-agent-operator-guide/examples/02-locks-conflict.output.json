@@ -1,0 +1,1 @@
+{"allow":false,"code":"LOCK_CONFLICT","reason":"overlapping active locks detected","details":{"conflicts":[{"task_a":"T-12","resource_a":"src","task_b":"T-13","resource_b":"src/api/handler.py"}]}}

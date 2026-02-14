@@ -1,0 +1,21 @@
+{
+  "ledger": [
+    {
+      "task_id": "T-12",
+      "status": "done",
+      "owner": "agent-1",
+      "dependencies": []
+    },
+    {
+      "task_id": "T-13",
+      "status": "todo",
+      "owner": "",
+      "dependencies": ["T-12"]
+    }
+  ],
+  "active_locks": [],
+  "events": [
+    {"task_id": "T-12", "event_type": "state_transition"},
+    {"task_id": "T-13", "event_type": "created"}
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "locks": [
+    {"task_id": "T-12", "resource": "tests/test_api.py", "active": true},
+    {"task_id": "T-13", "resource": "src/core.py", "active": true},
+    {"task_id": "T-14", "resource": "docs/notes.md", "active": false}
+  ]
+}

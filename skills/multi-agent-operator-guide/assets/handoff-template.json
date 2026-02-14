@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "00000000-0000-0000-0000-000000000000",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "objective": "<global objective>",
+  "constraints": {
+    "time_budget": "<optional>",
+    "quality_bar": "<required quality expectations>",
+    "tool_limits": "<optional>"
+  },
+  "ledger": [
+    {
+      "task_id": "T-1",
+      "title": "<task title>",
+      "status": "todo",
+      "owner": "",
+      "dependencies": [],
+      "lock_scope": ["<resource>"],
+      "timeout_seconds": 1200,
+      "heartbeat_interval_seconds": 120,
+      "priority": "normal",
+      "last_heartbeat_at": null
+    }
+  ],
+  "active_locks": [
+    {
+      "task_id": "T-1",
+      "resource": "<resource>",
+      "active": true
+    }
+  ],
+  "dependencies": [
+    {
+      "task_id": "T-2",
+      "depends_on_task_id": "T-1"
+    }
+  ],
+  "open_blockers": [
+    {
+      "task_id": "T-2",
+      "code": "DEPENDENCY_NOT_MET",
+      "reason": "Waiting for T-1"
+    }
+  ],
+  "acceptance_targets": [
+    {
+      "task_id": "T-1",
+      "criteria": ["<criterion>"]
+    }
+  ]
+}
