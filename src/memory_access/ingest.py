@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import logging
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from .crawl import CrawlService
 from .embeddings import EmbeddingEngine, BedrockEmbeddingEngine
@@ -115,12 +117,14 @@ class Ingestor:
         kb_id: str,
         url: str,
         limit: int = 1000,
-        on_progress: callable | None = None,
+        on_progress: Callable[..., Any] | None = None,
     ) -> int:
         """Crawl a URL and ingest all pages into a knowledge base.
 
         Returns the total number of chunks stored.
         """
+        if self.crawl_service is None:
+            raise RuntimeError("No crawl service configured")
         pages = await self.crawl_service.crawl(url, limit=limit)
         total_chunks = 0
 
@@ -194,6 +198,8 @@ class Ingestor:
 
     async def ingest_scrape(self, kb_id: str, url: str) -> int:
         """Scrape a single URL and ingest into a knowledge base."""
+        if self.crawl_service is None:
+            raise RuntimeError("No crawl service configured")
         page = await self.crawl_service.scrape(url)
         return await self.ingest_page(kb_id, page)
 
@@ -201,7 +207,7 @@ class Ingestor:
         self,
         kb_id: str,
         dir_path: str,
-        on_progress: callable | None = None,
+        on_progress: Callable[..., Any] | None = None,
     ) -> int:
         """Load Firecrawl JSON files from a directory and ingest into a KB.
 

@@ -2,15 +2,15 @@ import json
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock, patch
+from anthropic.types import TextBlock
 from memory_access.server import create_app
 from memory_access.models import Frame
 
 
 def _mock_anthropic_response(text: str):
     mock_response = MagicMock()
-    mock_content = MagicMock()
-    mock_content.text = text
-    mock_response.content = [mock_content]
+    text_block = TextBlock(type="text", text=text)
+    mock_response.content = [text_block]
     return mock_response
 
 

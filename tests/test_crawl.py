@@ -67,11 +67,12 @@ class TestFirecrawlServiceCrawl:
             assert pages[1].url == "https://example.com/page2"
             assert pages[1].markdown == "# Page 2"
 
-            mock_app.crawl.assert_called_once_with(
-                "https://example.com",
-                limit=10,
-                scrape_options={"formats": ["markdown"], "only_main_content": True},
-            )
+            call_args = mock_app.crawl.call_args
+            assert call_args.args[0] == "https://example.com"
+            assert call_args.kwargs["limit"] == 10
+            opts = call_args.kwargs["scrape_options"]
+            assert opts.formats == ["markdown"]
+            assert opts.only_main_content is True
 
     async def test_crawl_handles_missing_metadata(self):
         # Test when metadata is None
@@ -207,4 +208,4 @@ class TestFirecrawlServiceInit:
         with patch.dict("os.environ", {}, clear=True):
             with patch("firecrawl.FirecrawlApp") as MockFirecrawlApp:
                 service = FirecrawlService()
-                MockFirecrawlApp.assert_called_once_with(api_key=None)
+                MockFirecrawlApp.assert_called_once_with(api_key="")

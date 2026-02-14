@@ -26,14 +26,17 @@ class FirecrawlService(CrawlService):
     def __init__(self, api_key: str | None = None):
         from firecrawl import FirecrawlApp
 
-        self.app = FirecrawlApp(api_key=api_key or os.environ.get("FIRECRAWL_API_KEY"))
+        resolved_key = api_key or os.environ.get("FIRECRAWL_API_KEY", "")
+        self.app = FirecrawlApp(api_key=resolved_key)
 
     async def crawl(self, url: str, limit: int = 1000) -> list[CrawledPage]:
         """Crawl a URL using Firecrawl. Returns markdown pages."""
+        from firecrawl.v2.types import ScrapeOptions
+
         result = self.app.crawl(
             url,
             limit=limit,
-            scrape_options={"formats": ["markdown"], "only_main_content": True},
+            scrape_options=ScrapeOptions(formats=["markdown"], only_main_content=True),
         )
 
         pages = []

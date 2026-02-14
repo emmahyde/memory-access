@@ -1,6 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
+from anthropic.types import TextBlock
 from memory_access.normalizer import Normalizer
 from memory_access.models import Frame
 
@@ -8,9 +9,9 @@ from memory_access.models import Frame
 def _mock_anthropic_response(text: str):
     """Create a mock Anthropic API response."""
     mock_response = MagicMock()
-    mock_content = MagicMock()
-    mock_content.text = text
-    mock_response.content = [mock_content]
+    # Create a real TextBlock instead of a generic MagicMock
+    text_block = TextBlock(type="text", text=text)
+    mock_response.content = [text_block]
     return mock_response
 
 

@@ -53,10 +53,10 @@ class BedrockEmbeddingEngine:
         if self._client is None:
             import boto3
 
-            session_kwargs = {"region_name": self._aws_region}
-            if self._aws_profile:
-                session_kwargs["profile_name"] = self._aws_profile
-            session = boto3.Session(**session_kwargs)
+            session = boto3.Session(
+                region_name=self._aws_region,
+                profile_name=self._aws_profile,
+            )
             self._client = session.client("bedrock-runtime")
         return self._client
 

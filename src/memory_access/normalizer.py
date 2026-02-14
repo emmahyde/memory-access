@@ -5,6 +5,7 @@ import os
 import re
 
 import anthropic
+from anthropic.types import TextBlock
 
 from .models import Frame, Insight
 
@@ -147,7 +148,9 @@ class Normalizer:
             max_tokens=1024,
             messages=[{"role": "user", "content": DECOMPOSE_PROMPT.format(text=text)}],
         )
-        return _parse_json(response.content[0].text)
+        block = response.content[0]
+        assert isinstance(block, TextBlock)
+        return _parse_json(block.text)
 
     async def classify(self, text: str) -> dict:
         response = self.client.messages.create(
@@ -155,7 +158,9 @@ class Normalizer:
             max_tokens=512,
             messages=[{"role": "user", "content": CLASSIFY_PROMPT.format(text=text)}],
         )
-        return _parse_json(response.content[0].text)
+        block = response.content[0]
+        assert isinstance(block, TextBlock)
+        return _parse_json(block.text)
 
     async def normalize(
         self, text: str, source: str = "", domains: list[str] | None = None
