@@ -126,7 +126,7 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 }
 ```
 
-## MCP Tools (12 tools)
+## MCP Tools (21 tools)
 
 ### Storage
 
@@ -151,6 +151,18 @@ To use AWS Bedrock instead of OpenAI/Anthropic APIs:
 - **`add_knowledge_base`** — Create a new knowledge base by crawling or scraping a URL. Supports both full site crawling and single-page scraping with automatic ingestion and semantic indexing.
 - **`search_knowledge_base`** — Search external documentation by semantic similarity. Optionally filter by KB name.
 - **`list_knowledge_bases`** — List all knowledge bases with descriptions and chunk counts.
+
+### Task orchestration
+
+- **`create_task`** — Create a task with DB-enforced lifecycle state.
+- **`assign_task_locks`** — Acquire active locks for resources (exact + path-prefix conflict detection).
+- **`release_task_locks`** — Release active locks for a task (optionally scoped to resources).
+- **`add_task_dependencies`** — Add dependency edges between tasks.
+- **`transition_task`** — Atomically transition state with optimistic concurrency (`expected_version`).
+- **`append_task_event`** — Append audit/worklog events (append-only at DB level).
+- **`get_task`** — Fetch a task by ID.
+- **`list_tasks`** — List tasks with optional status filter.
+- **`list_task_events`** — List append-only events for a task.
 
 ## Semantic Frames
 

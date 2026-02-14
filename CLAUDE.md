@@ -39,7 +39,7 @@ uv run memory-access
 - **`normalizer.py`** — LLM decomposition/classification via Anthropic API (or Bedrock). Uses `DECOMPOSE_PROMPT` and `CLASSIFY_PROMPT`
 - **`embeddings.py`** — Embedding generation (OpenAI or Bedrock Titan), L2-normalized float32 vectors. `create_embedding_engine()` factory selects provider.
 - **`storage.py`** — `InsightStore` class: SQLite persistence, migration system, subject indexing, knowledge graph queries
-- **`server.py`** — `MemoryAccessApp` orchestrator + MCP tool definitions (9 tools: `store_insight`, `search_insights`, `list_insights`, `update_insight`, `forget`, `search_by_subject`, `related_insights`, `add_subject_relation`, `get_subject_relations`)
+- **`server.py`** — `MemoryAccessApp` orchestrator + MCP tool definitions (insights, subject graph, knowledge bases, and task-state orchestration tools)
 
 ### Database
 
