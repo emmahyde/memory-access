@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SubagentResult",
+  "type": "object",
+  "required": ["task_id", "result"],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "result": {
+      "type": "object",
+      "required": ["status", "changes", "acceptance_check", "worklog_path"],
+      "properties": {
+        "status": {"type": "string", "enum": ["done", "blocked", "failed"]},
+        "changes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "acceptance_check": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["criterion", "status", "evidence"],
+            "properties": {
+              "criterion": {"type": "string", "minLength": 1},
+              "status": {"type": "string", "enum": ["pass", "fail"]},
+              "evidence": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": true
+          }
+        },
+        "worklog_path": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AssignmentPacket",
+  "type": "object",
+  "required": ["task_id", "assignment", "active_locks"],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "assignment": {
+      "type": "object",
+      "required": ["lock_scope", "forbidden_scope", "acceptance_criteria", "worklog_path"],
+      "properties": {
+        "lock_scope": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "forbidden_scope": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "worklog_path": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "active_locks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["task_id", "status", "lock_scope"],
+        "properties": {
+          "task_id": {"type": "string", "minLength": 1},
+          "owner": {"type": "string"},
+          "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done", "failed"]},
+          "lock_scope": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,53 @@
+{
+  "description": "Example orchestrator runtime gates for strict multi-agent enforcement",
+  "hooks": {
+    "PreDispatch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/pre-dispatch.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostExecution": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/post-execution.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreComplete": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/pre-complete.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "OnLockUpdate": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/on-lock-update.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
