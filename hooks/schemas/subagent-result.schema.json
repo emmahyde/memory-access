@@ -7,12 +7,21 @@
     "task_id": {"type": "string", "minLength": 1},
     "result": {
       "type": "object",
-      "required": ["status", "changes", "acceptance_check", "worklog_path"],
+      "required": ["status", "changes", "acceptance_check", "worklog_path", "notes_for_orchestrator"],
       "properties": {
         "status": {"type": "string", "enum": ["done", "blocked", "failed"]},
         "changes": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "object",
+            "required": ["resource", "action"],
+            "properties": {
+              "resource": {"type": "string", "minLength": 1},
+              "action": {"type": "string", "minLength": 1},
+              "evidence": {"type": "string"}
+            },
+            "additionalProperties": true
+          }
         },
         "acceptance_check": {
           "type": "array",
@@ -27,8 +36,27 @@
             "additionalProperties": true
           }
         },
-        "worklog_path": {"type": "string", "minLength": 1}
+        "worklog_path": {"type": "string", "minLength": 1},
+        "notes_for_orchestrator": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {"type": "string", "minLength": 1}
+        }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {"const": "done"}
+            }
+          },
+          "then": {
+            "properties": {
+              "acceptance_check": {"minItems": 1}
+            }
+          }
+        }
+      ],
       "additionalProperties": true
     }
   },

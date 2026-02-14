@@ -7,7 +7,14 @@
     "task_id": {"type": "string", "minLength": 1},
     "assignment": {
       "type": "object",
-      "required": ["lock_scope", "forbidden_scope", "acceptance_criteria", "worklog_path"],
+      "required": [
+        "lock_scope",
+        "forbidden_scope",
+        "acceptance_criteria",
+        "worklog_path",
+        "timeout_seconds",
+        "heartbeat_interval_seconds"
+      ],
       "properties": {
         "lock_scope": {
           "type": "array",
@@ -23,7 +30,9 @@
           "minItems": 1,
           "items": {"type": "string", "minLength": 1}
         },
-        "worklog_path": {"type": "string", "minLength": 1}
+        "worklog_path": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 30},
+        "heartbeat_interval_seconds": {"type": "integer", "minimum": 5}
       },
       "additionalProperties": true
     },
@@ -31,15 +40,11 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["task_id", "status", "lock_scope"],
+        "required": ["task_id", "resource", "active"],
         "properties": {
           "task_id": {"type": "string", "minLength": 1},
-          "owner": {"type": "string"},
-          "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done", "failed"]},
-          "lock_scope": {
-            "type": "array",
-            "items": {"type": "string", "minLength": 1}
-          }
+          "resource": {"type": "string", "minLength": 1},
+          "active": {"type": "boolean"}
         },
         "additionalProperties": true
       }

@@ -4,16 +4,11 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["task_id", "status", "lock_scope"],
+    "required": ["task_id", "resource", "active"],
     "properties": {
       "task_id": {"type": "string", "minLength": 1},
-      "owner": {"type": "string"},
-      "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done", "failed"]},
-      "lock_scope": {
-        "type": "array",
-        "minItems": 1,
-        "items": {"type": "string", "minLength": 1}
-      }
+      "resource": {"type": "string", "minLength": 1},
+      "active": {"type": "boolean"}
     },
     "additionalProperties": true
   }

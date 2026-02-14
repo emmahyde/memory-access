@@ -1,0 +1,1 @@
+{"allow":false,"code":"R-WD-001","reason":"task heartbeat exceeded timeout","details":{"timed_out":[{"task_id":"T-12","last_heartbeat_at":"2026-02-14T19:20:00Z","timeout_seconds":1200,"age_seconds":2400}]}}

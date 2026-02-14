@@ -1,0 +1,11 @@
+{
+  "now": "2026-02-14T20:00:00Z",
+  "tasks": [
+    {
+      "task_id": "T-12",
+      "status": "in_progress",
+      "timeout_seconds": 1200,
+      "last_heartbeat_at": "2026-02-14T19:20:00Z"
+    }
+  ]
+}
