@@ -23,8 +23,8 @@ Allowed states:
 Allowed transitions are DB-enforced by trigger:
 - `todo -> in_progress|blocked|failed|canceled`
 - `in_progress -> done|blocked|failed|canceled`
-- `blocked -> in_progress|failed|canceled`
-- `done|failed|canceled` are terminal
+- `blocked -> todo|in_progress|failed|canceled`
+- `done|failed|canceled` are terminal; self-loop updates are replay-only idempotent events
 
 ## Locking Rules
 
@@ -32,6 +32,18 @@ Active locks are stored in `task_locks`.
 Conflicts are DB-enforced for both:
 - exact same resource
 - path-prefix overlap (for example, `src` conflicts with `src/a.py`)
+
+## Watchdog Rules
+
+Each task assignment should carry:
+- `timeout_seconds`
+- `heartbeat_interval_seconds`
+- `last_heartbeat_at`
+
+If a task remains `in_progress` and `now - last_heartbeat_at > timeout_seconds`, orchestrator should:
+1. transition task to `blocked` with `TASK_TIMEOUT`
+2. release active locks
+3. replan assignment or escalate
 
 ## Troubleshooting
 
@@ -67,7 +79,18 @@ Meaning: optimistic version check failed (`expected_version` stale).
 
 Actions:
 1. Re-read task row.
-2. Retry transition with latest `version`.
+2. Retry transition with latest `version` using backoff: 0ms, 100ms, 250ms, 500ms.
+3. If still conflicting, block and replan conflicting tasks serially.
+
+### `TaskTimeout`
+
+Meaning: liveness watchdog found `in_progress` task heartbeat beyond timeout budget.
+
+Actions:
+1. Transition task to `blocked` with `TASK_TIMEOUT`.
+2. Release active task locks.
+3. Transition `blocked -> todo` only when refreshed context and lock scope are ready.
+4. Re-dispatch with same task id or create replacement task if ownership changed.
 
 ## Validation SQL
 
@@ -126,6 +149,9 @@ LIMIT 100;
    - Task tables/triggers exist.
 4. Run one smoke transition flow:
    - create task
+   - `todo -> in_progress`
+   - `in_progress -> blocked`
+   - `blocked -> todo`
    - `todo -> in_progress`
    - `in_progress -> done`
 

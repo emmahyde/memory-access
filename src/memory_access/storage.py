@@ -376,6 +376,29 @@ async def _migrate_007_task_lock_path_overlap(db: aiosqlite.Connection) -> str:
     return "Add prefix-aware lock conflict triggers on task_locks"
 
 
+async def _migrate_008_task_state_replan_transition(db: aiosqlite.Connection) -> str:
+    """Allow blocked -> todo transitions for explicit replanning."""
+    await db.executescript("""
+        DROP TRIGGER IF EXISTS trg_task_status_transition_guard;
+
+        CREATE TRIGGER IF NOT EXISTS trg_task_status_transition_guard
+        BEFORE UPDATE OF status ON tasks
+        FOR EACH ROW
+        WHEN NOT (
+            (OLD.status = NEW.status) OR
+            (OLD.status = 'todo' AND NEW.status IN ('in_progress', 'blocked', 'failed', 'canceled')) OR
+            (OLD.status = 'in_progress' AND NEW.status IN ('done', 'blocked', 'failed', 'canceled')) OR
+            (OLD.status = 'blocked' AND NEW.status IN ('todo', 'in_progress', 'failed', 'canceled')) OR
+            (OLD.status IN ('done', 'failed', 'canceled') AND NEW.status = OLD.status)
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid task state transition');
+        END;
+    """)
+    await db.commit()
+    return "Allow blocked->todo replanning transition in task state trigger"
+
+
 class InsightStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
@@ -387,6 +410,7 @@ class InsightStore:
             (5, _migrate_005_knowledge_bases),
             (6, _migrate_006_task_state_machine),
             (7, _migrate_007_task_lock_path_overlap),
+            (8, _migrate_008_task_state_replan_transition),
         ]  # list[tuple[int, Callable]]
 
     async def initialize(self):

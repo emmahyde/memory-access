@@ -137,6 +137,31 @@ class TestTaskStore:
         )
         assert main_in_progress.task.status == TaskState.IN_PROGRESS
 
+    async def test_blocked_to_todo_replan_transition_allowed(self, tmp_db):
+        store = InsightStore(tmp_db)
+        await store.initialize()
+        task_store = TaskStore(tmp_db)
+
+        task = await task_store.create_task("replan me")
+
+        blocked = await task_store.transition(
+            task.task_id,
+            from_state=TaskState.TODO,
+            to_state=TaskState.BLOCKED,
+            actor="orchestrator",
+            expected_version=task.version,
+        )
+        assert blocked.task.status == TaskState.BLOCKED
+
+        todo = await task_store.transition(
+            task.task_id,
+            from_state=TaskState.BLOCKED,
+            to_state=TaskState.TODO,
+            actor="orchestrator",
+            expected_version=blocked.task.version,
+        )
+        assert todo.task.status == TaskState.TODO
+
     async def test_concurrent_cas_allows_only_one_winner(self, tmp_db):
         store = InsightStore(tmp_db)
         await store.initialize()
@@ -201,4 +226,4 @@ class TestTaskStore:
             assert await cursor.fetchone() is not None
             cursor = await db.execute("SELECT MAX(version) FROM schema_versions")
             row = await cursor.fetchone()
-            assert row is not None and row[0] >= 7
+            assert row is not None and row[0] >= 8
