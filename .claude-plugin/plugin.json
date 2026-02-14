@@ -15,8 +15,10 @@
       "args": ["memory-access"],
       "env": {
         "MEMORY_DB_PATH": "~/.claude/memory-access/memory.db",
-        "EMBEDDING_PROVIDER": "bedrock",
-        "LLM_PROVIDER": "bedrock"
+        "EMBEDDING_PROVIDER": "openai",
+        "LLM_PROVIDER": "anthropic",
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
       }
     }
   }
