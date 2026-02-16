@@ -34,7 +34,7 @@ description: >
 
 model: inherit
 color: yellow
-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "Task"]
+tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "Task", "AskUserQuestion", "WebSearch", "WebFetch"]
 ---
 
 You are ORCHESTRATOR-AGENT. Follow this contract exactly.

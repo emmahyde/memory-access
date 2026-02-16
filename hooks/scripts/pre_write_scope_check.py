@@ -8,12 +8,20 @@ import json
 from pathlib import Path
 
 
+ORCHESTRATOR_ALLOWED = (".claude/", "docs/")
+
+
 def is_always_allowed(rel_path: str) -> bool:
     """Check if path is in always-allowed directories."""
     return (
         rel_path.startswith(".orchestrator/outputs/") or
         rel_path.startswith("worklogs/")
     )
+
+
+def is_orchestrator_allowed(rel_path: str) -> bool:
+    """When no lock file exists (orchestrator context), only allow these dirs."""
+    return any(rel_path.startswith(prefix) for prefix in ORCHESTRATOR_ALLOWED)
 
 
 def normalize_to_relative(file_path: str, cwd: str) -> str:
@@ -78,14 +86,25 @@ def main():
     if not cwd or not file_path:
         sys.exit(0)
 
-    locks_file = Path(cwd) / ".orchestrator" / "active_locks.json"
-    if not locks_file.exists():
-        sys.exit(0)
-
     rel_path = normalize_to_relative(file_path, cwd)
 
     if is_always_allowed(rel_path):
         sys.exit(0)
+
+    locks_file = Path(cwd) / ".orchestrator" / "active_locks.json"
+    if not locks_file.exists():
+        # No lock file = orchestrator or main session context
+        # Restrict writes to allowed directories only
+        if is_orchestrator_allowed(rel_path):
+            sys.exit(0)
+        dirs = ", ".join(ORCHESTRATOR_ALLOWED)
+        error_response = {
+            "decision": "deny",
+            "reason": f"File '{rel_path}' is outside allowed write directories ({dirs}). "
+                      "Only .claude/ and docs/ are writable from this context."
+        }
+        print(json.dumps(error_response), file=sys.stderr)
+        sys.exit(2)
 
     active_scopes = get_active_scopes(locks_file)
 
