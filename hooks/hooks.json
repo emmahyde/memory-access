@@ -34,16 +34,6 @@
           }
         ]
       },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/pre_write_scope_check.py",
-            "timeout": 5
-          }
-        ]
-      }
     ],
     "PostToolUse": [
       {

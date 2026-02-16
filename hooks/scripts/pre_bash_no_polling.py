@@ -5,7 +5,7 @@
 """PreToolUse:Bash hook — blocks polling and destructive commands during orchestrator sessions.
 
 Blocked:
-  - Polling: sleep, tail/cat on .output files
+  - Polling: sleep
   - Destructive: rm (with -r/-f flags), git reset --hard, git clean, git checkout .
 """
 
@@ -18,9 +18,6 @@ from pathlib import Path
 BLOCKED_PATTERNS = [
     # Polling
     (re.compile(r'\bsleep\b'), "sleep — end your turn and wait for the SubagentStop hook"),
-    (re.compile(r'/tasks/[^/]*\.output'), "task output file read — wait for hook delivery"),
-    (re.compile(r'\btail\b.*\.output'), "tail on output file — wait for hook delivery"),
-    (re.compile(r'\bcat\b.*\.output'), "cat on output file — wait for hook delivery"),
     # Destructive
     (re.compile(r'\brm\s+.*-[^\s]*[rf]'), "rm with -r or -f flags"),
     (re.compile(r'\bgit\s+reset\s+--hard\b'), "git reset --hard"),
