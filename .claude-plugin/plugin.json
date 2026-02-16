@@ -1,6 +1,6 @@
 {
   "name": "memory-access",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Teaches Claude how to use the memory-access MCP server for persistent knowledge storage, retrieval, and graph traversal. Includes PreCompact hook to preserve insights before context compaction.",
   "author": {
     "name": "Emma Hyde"
