@@ -1,0 +1,61 @@
+{
+  "scenario": "timeout_recovery",
+  "task_id": "T-300",
+  "steps": [
+    {
+      "step": "transition_in_progress",
+      "status": "in_progress",
+      "version": 1
+    },
+    {
+      "step": "watchdog_timeout",
+      "exit_code": 1,
+      "allow": false,
+      "code": "R-WD-001",
+      "reason": "task heartbeat exceeded timeout",
+      "timed_out_task_id": "T-300",
+      "age_seconds": 2400
+    },
+    {
+      "step": "transition_blocked",
+      "status": "blocked",
+      "version": 2,
+      "retry_count": 1
+    },
+    {
+      "step": "release_locks",
+      "released": 1
+    },
+    {
+      "step": "transition_todo",
+      "status": "todo",
+      "version": 3,
+      "retry_count": 1
+    },
+    {
+      "step": "active_locks_after_release",
+      "active_locks": []
+    },
+    {
+      "step": "on_lock_update",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "Validation passed"
+    },
+    {
+      "step": "validate_packet",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "assignment packet valid"
+    },
+    {
+      "step": "pre_dispatch",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "Validation passed"
+    }
+  ]
+}

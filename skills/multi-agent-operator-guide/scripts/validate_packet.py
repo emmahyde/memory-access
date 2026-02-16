@@ -99,7 +99,6 @@ def main() -> int:
         "acceptance_criteria",
         "worklog_path",
         "timeout_seconds",
-        "heartbeat_interval_seconds",
     ]
     missing_task = [key for key in task_required if key not in task]
     if missing_task:
@@ -147,20 +146,6 @@ def main() -> int:
     timeout_seconds = task["timeout_seconds"]
     if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or timeout_seconds < 30:
         return emit(False, "SCHEMA_INVALID", "task.timeout_seconds must be int >= 30")
-
-    heartbeat_interval_seconds = task["heartbeat_interval_seconds"]
-    if (
-        isinstance(heartbeat_interval_seconds, bool)
-        or not isinstance(heartbeat_interval_seconds, int)
-        or heartbeat_interval_seconds < 5
-    ):
-        return emit(False, "SCHEMA_INVALID", "task.heartbeat_interval_seconds must be int >= 5")
-    if heartbeat_interval_seconds >= timeout_seconds:
-        return emit(
-            False,
-            "SCHEMA_INVALID",
-            "task.heartbeat_interval_seconds must be less than task.timeout_seconds",
-        )
 
     if not isinstance(packet["context_package"], list):
         return emit(False, "SCHEMA_INVALID", "context_package must be an array")

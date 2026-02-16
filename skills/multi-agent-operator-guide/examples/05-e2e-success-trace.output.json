@@ -1,0 +1,83 @@
+{
+  "scenario": "success",
+  "task_id": "T-200",
+  "steps": [
+    {
+      "step": "validate_packet",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "assignment packet valid"
+    },
+    {
+      "step": "pre_dispatch",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "Validation passed"
+    },
+    {
+      "step": "transition_in_progress",
+      "status": "in_progress",
+      "version": 1
+    },
+    {
+      "step": "validate_result",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "result packet valid"
+    },
+    {
+      "step": "post_execution",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "Validation passed"
+    },
+    {
+      "step": "transition_done",
+      "status": "done",
+      "version": 2
+    },
+    {
+      "step": "active_locks_after_release",
+      "active_locks": [
+        {
+          "task_id": "T-199",
+          "resource": "src/api.py",
+          "active": true
+        }
+      ]
+    },
+    {
+      "step": "on_lock_update",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "Validation passed"
+    },
+    {
+      "step": "reconcile_ledger",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "ledger reconciliation passed",
+      "details": {
+        "task_count": 2,
+        "active_lock_count": 1,
+        "event_count": 2
+      }
+    },
+    {
+      "step": "watchdog",
+      "exit_code": 0,
+      "allow": true,
+      "code": "OK",
+      "reason": "watchdog check passed",
+      "details": {
+        "timed_out_count": 0
+      }
+    }
+  ]
+}

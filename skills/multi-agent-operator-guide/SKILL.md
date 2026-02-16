@@ -13,10 +13,10 @@ Use this skill when you need deterministic orchestration across multiple agents,
 
 ## Mandatory Execution Loop
 
-1. Orchestrate (`references/ORCHESTRATOR-AGENT.md`)
+1. Spawn orchestrator agent (`memory-access:orchestrator`) with global objective and constraints
 2. Validate assignment packet (`scripts/validate_packet.py`)
 3. Check lock overlap (`scripts/check_lock_overlap.py`)
-4. Execute subagent (`references/PARALLELIZABLE-SUBAGENT.md`)
+4. Build dispatch prompt via `scripts/build_dispatch_prompt.py` and spawn any agent type via Task tool
 5. Validate result packet (`scripts/validate_result.py`)
 6. Reconcile ledger/locks/events (`scripts/reconcile_ledger.py`)
 
@@ -83,9 +83,8 @@ These two payloads are the minimum required control-plane artifacts for a first 
 2. `references/error-codes.md`
 3. `references/state-machine.md`
 4. `references/locking.md`
-5. Active role reference:
-   - `references/ORCHESTRATOR-AGENT.md`
-   - `references/PARALLELIZABLE-SUBAGENT.md`
+
+The orchestrator role is a proper agent (`agents/orchestrator.md`) — its contract is the system prompt when spawned. The subagent contract (`references/subagent-directive.md`) is a directive preamble that the orchestrator injects into the prompt of any agent it dispatches, ensuring lock/scope/result compliance regardless of agent type.
 
 Read only additional references as needed:
 
@@ -98,7 +97,7 @@ Read only additional references as needed:
 1. Start from `assets/handoff-template.json` and fill run metadata.
 2. Build assignment packet and run `scripts/validate_packet.py`.
 3. Run `scripts/check_lock_overlap.py` before dispatch.
-4. Execute subagent task and append worklog entries.
+4. Dispatch agent via Task tool with subagent directive + assignment packet; agent appends worklog entries.
 5. Validate result packet with `scripts/validate_result.py`.
 6. Reconcile with `scripts/reconcile_ledger.py` before marking done.
 7. Use `examples/README.md` for a complete runnable walkthrough with expected validator outputs.

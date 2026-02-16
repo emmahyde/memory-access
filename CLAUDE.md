@@ -78,4 +78,24 @@ The git workflow automatically publishes to PyPI. To release a new version, just
 
 ## Plugin
 
-This repo is also a Claude Code plugin (`claude plugin install memory-access@emmahyde`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`. Includes a `using-semantic-memory` skill, a `PreCompact` hook for insight preservation, and a `UserPromptSubmit` hook for post-compaction insight storage.
+This repo is also a Claude Code plugin (`claude plugin install memory-access@emmahyde`). Plugin files live at the repo root: `.claude-plugin/`, `skills/`, `hooks/`, `agents/`.
+
+### Plugin components
+
+- **Skills:** `using-semantic-memory`, `multi-agent-operator-guide`
+- **Agents:** `orchestrator` — coordinates parallel subagent dispatch with lock management
+- **Hooks:** `PreCompact` (insight preservation), `UserPromptSubmit` (pending insights), `SubagentStop` (sync gate + async summary injection)
+
+### Multi-agent orchestration (`skills/multi-agent-operator-guide/`)
+
+- `references/subagent-directive.md` — behavioral contract injected into ANY agent's Task prompt (not a standalone agent type)
+- `scripts/build_dispatch_prompt.py` — deterministic assembler: directive + assignment packet → complete Task prompt
+- `scripts/validate_packet.py`, `scripts/validate_result.py` — schema validators for assignment/result packets (accept both JSON and YAML frontmatter)
+- Orchestrator uses `tools:` whitelist in agent frontmatter to restrict capabilities (e.g. excludes TaskOutput)
+
+### Design principles for agent workflows
+
+- LLM prompts contain decision-making logic only — never mechanical steps (create files, touch markers, run scripts). Automate those with hooks, scripts, or programmatic wrappers.
+- `TaskOutput` always returns full output into caller context — avoid it for token-sensitive orchestration. Use async command hooks with `additionalContext` instead.
+- Hook type capabilities: `type: "agent"` and `type: "prompt"` can only return `{ok: true/false}`. Only async `type: "command"` hooks can inject `systemMessage`/`additionalContext`.
+- Behavioral contracts that apply to any dispatched agent must be injectable directives, not standalone agent types (prevents dispatching other agent types).

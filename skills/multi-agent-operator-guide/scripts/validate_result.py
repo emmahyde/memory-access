@@ -41,15 +41,118 @@ def detect_secret(value: str) -> str | None:
     return None
 
 
+def parse_yaml_frontmatter(text: str) -> dict[str, Any] | None:
+    """Extract YAML frontmatter from markdown and parse to dict using simple text parsing."""
+    lines = text.strip().splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    frontmatter_lines: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        frontmatter_lines.append(line)
+    else:
+        return None
+
+    # Simple YAML-to-dict parser for flat + list-of-dict structure
+    result: dict[str, Any] = {}
+    current_key: str | None = None
+    current_list: list[Any] | None = None
+    current_item: dict[str, str] | None = None
+
+    for line in frontmatter_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Top-level key: value
+        if not line.startswith(" ") and not line.startswith("\t"):
+            if current_key and current_list is not None:
+                if current_item:
+                    current_list.append(current_item)
+                result[current_key] = current_list
+            match = re.match(r'^(\w+):\s*(.*)', line)
+            if match:
+                key, val = match.group(1), match.group(2).strip().strip('"')
+                if not val:
+                    current_key = key
+                    current_list = []
+                    current_item = None
+                else:
+                    result[key] = val
+                    current_key = None
+                    current_list = None
+                    current_item = None
+        elif current_list is not None:
+            # List item start
+            if stripped.startswith("- "):
+                if current_item:
+                    current_list.append(current_item)
+                    current_item = None
+                rest = stripped[2:].strip()
+                # Simple string list item
+                if rest.startswith('"') and rest.endswith('"'):
+                    current_list.append(rest.strip('"'))
+                elif ":" in rest:
+                    # Inline key: value in list item
+                    m = re.match(r'(\w+):\s*(.*)', rest)
+                    if m:
+                        current_item = {m.group(1): m.group(2).strip().strip('"')}
+                else:
+                    current_list.append(rest.strip('"'))
+            elif current_item is not None:
+                # Continuation key in current dict item
+                m = re.match(r'\s+(\w+):\s*(.*)', line)
+                if m:
+                    current_item[m.group(1)] = m.group(2).strip().strip('"')
+
+    if current_key and current_list is not None:
+        if current_item:
+            current_list.append(current_item)
+        result[current_key] = current_list
+
+    return result if result else None
+
+
+def frontmatter_to_result(fm: dict[str, Any]) -> dict[str, Any]:
+    """Convert parsed frontmatter fields to the subagent_result_v1 schema."""
+    # Map files_touched -> changes
+    changes = []
+    for item in fm.get("files_touched", []):
+        if isinstance(item, dict):
+            changes.append({
+                "resource": item.get("resource", ""),
+                "action": item.get("action", ""),
+                "evidence": item.get("evidence", ""),
+            })
+
+    return {
+        "schema_version": fm.get("schema_version", ""),
+        "run_id": fm.get("run_id", ""),
+        "task_id": fm.get("task_id", ""),
+        "status": fm.get("status", ""),
+        "changes": changes,
+        "acceptance_check": fm.get("acceptance_check", []),
+        "worklog_path": fm.get("worklog_path", ""),
+        "notes_for_orchestrator": fm.get("notes_for_orchestrator", []),
+    }
+
+
 def main() -> int:
     raw = sys.stdin.read()
     if not raw.strip():
         return emit(False, "SCHEMA_INVALID", "empty stdin payload")
 
+    # Try JSON first, then YAML frontmatter
+    result = None
     try:
         result = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        return emit(False, "SCHEMA_INVALID", "invalid JSON", {"error": str(exc)})
+    except json.JSONDecodeError:
+        fm = parse_yaml_frontmatter(raw)
+        if fm:
+            result = frontmatter_to_result(fm)
+        else:
+            return emit(False, "SCHEMA_INVALID", "input is neither valid JSON nor YAML frontmatter")
 
     if not isinstance(result, dict):
         return emit(False, "SCHEMA_INVALID", "top-level payload must be an object")
