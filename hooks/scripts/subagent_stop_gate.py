@@ -24,8 +24,8 @@ def has_recent_task_report(outputs_dir: Path, seconds: int = 60) -> bool:
 
 def is_orchestrated_subagent(cwd: Path) -> bool:
     """Check if this is an orchestrated subagent context."""
-    outputs_dir = cwd / ".orchestrator" / "outputs"
-    active_dispatch = cwd / ".orchestrator" / ".active_dispatch"
+    outputs_dir = cwd / '.claude/orchestrator' / "outputs"
+    active_dispatch = cwd / '.claude/orchestrator' / ".active_dispatch"
 
     return outputs_dir.exists() and active_dispatch.exists()
 
@@ -45,7 +45,7 @@ def main():
     if not is_orchestrated_subagent(cwd):
         sys.exit(0)
 
-    outputs_dir = cwd / ".orchestrator" / "outputs"
+    outputs_dir = cwd / '.claude/orchestrator' / "outputs"
     if not has_recent_task_report(outputs_dir, seconds=60):
         error_response = {
             "decision": "block",

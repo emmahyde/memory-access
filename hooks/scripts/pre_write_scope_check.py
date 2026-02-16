@@ -14,7 +14,7 @@ ORCHESTRATOR_ALLOWED = (".claude/", "docs/")
 def is_always_allowed(rel_path: str) -> bool:
     """Check if path is in always-allowed directories."""
     return (
-        rel_path.startswith(".orchestrator/outputs/") or
+        rel_path.startswith(".claude/orchestrator/outputs/") or
         rel_path.startswith("worklogs/")
     )
 
@@ -86,10 +86,15 @@ def main():
     if is_always_allowed(rel_path):
         sys.exit(0)
 
-    locks_file = Path(cwd) / ".orchestrator" / "active_locks.json"
+    orchestrator_dir = Path(cwd) / ".claude" / "orchestrator"
+    locks_file = orchestrator_dir / "active_locks.json"
+
+    # No .claude/orchestrator/ dir = normal interactive session, no restrictions
+    if not orchestrator_dir.exists():
+        sys.exit(0)
+
+    # Dir exists but no lock file = orchestrator hasn't initialized yet
     if not locks_file.exists():
-        # No lock file = orchestrator or main session context
-        # Restrict writes to allowed directories only
         if any(rel_path.startswith(p) for p in ORCHESTRATOR_ALLOWED):
             sys.exit(0)
         dirs = ", ".join(ORCHESTRATOR_ALLOWED)

@@ -170,7 +170,7 @@ def main():
     if not cwd:
         sys.exit(0)
 
-    outputs_dir = Path(cwd) / '.orchestrator' / 'outputs'
+    outputs_dir = Path(cwd) / '.claude/orchestrator' / 'outputs'
     if not outputs_dir.is_dir():
         sys.exit(0)
 
@@ -190,7 +190,7 @@ def main():
     task_id = frontmatter.get('task_id', '')
     status = frontmatter.get('status', '')
     report_basename = report.name
-    report_relpath = f'.orchestrator/outputs/{report_basename}'
+    report_relpath = f'.claude/orchestrator/outputs/{report_basename}'
 
     files_touched = frontmatter.get('files_touched', [])
     acceptance_check = frontmatter.get('acceptance_check', [])

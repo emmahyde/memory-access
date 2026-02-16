@@ -78,7 +78,7 @@ def main() -> int:
         # Convert title to snake_case descriptor
         descriptor = "_".join(title.lower().split())
         descriptor = re.sub(r"[^a-z0-9_]", "", descriptor)
-        task["report_path"] = f".orchestrator/outputs/task__{descriptor}.md"
+        task["report_path"] = f".claude/orchestrator/outputs/task__{descriptor}.md"
         packet["task"] = task
 
     # Build prompt

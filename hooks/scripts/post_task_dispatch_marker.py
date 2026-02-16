@@ -62,7 +62,7 @@ def deduplicate_locks(locks: list[dict]) -> list[dict]:
 
 def merge_and_update_locks(cwd: Path, packet: dict):
     try:
-        locks_file = cwd / '.orchestrator' / 'active_locks.json'
+        locks_file = cwd / '.claude/orchestrator' / 'active_locks.json'
 
         existing_locks = []
         if locks_file.is_file():
@@ -103,7 +103,7 @@ def main():
         sys.exit(0)
 
     cwd = Path(cwd_str)
-    orchestrator_dir = cwd / '.orchestrator'
+    orchestrator_dir = cwd / '.claude/orchestrator'
     orchestrator_dir.mkdir(exist_ok=True)
 
     active_dispatch_marker = orchestrator_dir / '.active_dispatch'

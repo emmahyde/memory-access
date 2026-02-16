@@ -104,7 +104,7 @@ def main() -> None:
         f"{', '.join(missing)}. The subagent contract requires these for "
         f"writing task reports and worklogs."
     )
-    orchestrated = (cwd / ".orchestrator").is_dir()
+    orchestrated = (cwd / '.claude/orchestrator').is_dir()
 
     if orchestrated:
         print(
