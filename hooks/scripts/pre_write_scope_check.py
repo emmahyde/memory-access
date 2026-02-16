@@ -19,11 +19,6 @@ def is_always_allowed(rel_path: str) -> bool:
     )
 
 
-def is_orchestrator_allowed(rel_path: str) -> bool:
-    """When no lock file exists (orchestrator context), only allow these dirs."""
-    return any(rel_path.startswith(prefix) for prefix in ORCHESTRATOR_ALLOWED)
-
-
 def normalize_to_relative(file_path: str, cwd: str) -> str:
     """Convert absolute path to relative path from cwd."""
     file_path_obj = Path(file_path)
@@ -95,7 +90,7 @@ def main():
     if not locks_file.exists():
         # No lock file = orchestrator or main session context
         # Restrict writes to allowed directories only
-        if is_orchestrator_allowed(rel_path):
+        if any(rel_path.startswith(p) for p in ORCHESTRATOR_ALLOWED):
             sys.exit(0)
         dirs = ", ".join(ORCHESTRATOR_ALLOWED)
         error_response = {
