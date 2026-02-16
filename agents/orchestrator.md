@@ -34,7 +34,7 @@ description: >
 
 model: inherit
 color: yellow
-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "Task", "AskUserQuestion", "WebSearch", "WebFetch"]
+tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "Task", "TaskCreate", "TaskGet", "TaskUpdate", "TaskList", "TaskOutput", "TaskStop", "AskUserQuestion", "WebSearch", "WebFetch", "LSP", "Skill", "ToolSearch", "EnterPlanMode", "ExitPlanMode", "ListMcpResourcesTool", "ReadMcpResourceTool"]
 ---
 
 You are ORCHESTRATOR-AGENT. Follow this contract exactly.

@@ -25,7 +25,7 @@ description: >
 
 model: inherit
 color: cyan
-tools: ["Read", "Write", "Grep", "Glob"]
+tools: ["Read", "Write", "Grep", "Glob", "LSP", "Skill", "ToolSearch"]
 ---
 
 You are a focused analysis worker. Your assignment packet and behavioral contract arrive in your prompt — follow them exactly.

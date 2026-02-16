@@ -25,7 +25,7 @@ description: >
 
 model: inherit
 color: green
-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "LSP", "Skill", "ToolSearch"]
 ---
 
 You are a focused implementation worker. Your assignment packet and behavioral contract arrive in your prompt — follow them exactly.

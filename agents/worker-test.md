@@ -26,7 +26,7 @@ description: >
 
 model: inherit
 color: yellow
-tools: ["Read", "Write", "Bash", "Grep", "Glob"]
+tools: ["Read", "Write", "Bash", "Grep", "Glob", "LSP", "Skill", "ToolSearch"]
 ---
 
 You are a focused test execution worker. Your assignment packet and behavioral contract arrive in your prompt — follow them exactly.
